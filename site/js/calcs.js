@@ -72,6 +72,7 @@ dash.calc('bracket', {
     const out = [];
     tournaments.forEach((t) => {
       const tid = t.tournament_id;
+      if (t.playoffs === false) return; // round robin only
       const st = standings.filter((s) => s.tournament_id === tid);
       const pool = matches.filter((m) => m.tournament_id === tid && m.stage === 'Pool play');
       const poolDone = pool.length > 0 && pool.every((m) => m.status === 'Final');

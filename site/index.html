@@ -47,6 +47,7 @@
     <button role="tab" id="tab-review" data-tab="review">Match review</button>
     <button role="tab" id="tab-all" data-tab="all">All tournaments</button>
     <button role="tab" id="tab-check" data-tab="check">Data check</button>
+    <button role="tab" id="tab-admin" data-tab="admin" hidden>Admin</button>
   </nav>
 
   <!-- ===================== Home ===================== -->
@@ -394,22 +395,15 @@
       <p class="tt-note">Everyone added to any tournament. Steam names and profile IDs are what the update job uses to find each player's games.</p>
       <div class="tt-scroll"><table id="players-table" data-source="players" data-row-key="player"><thead></thead><tbody></tbody></table></div>
     </div>
-    <div class="tt-card" id="manage-card" hidden>
-      <h2>Manage tournaments</h2>
-      <p class="tt-note">Add a tournament or change one: its dates, status, players and schedule. Everyone invited sees a change straight away, and it’s written to GitHub with the next update. Only organizers see this.</p>
-      <div id="manage-pending"></div>
-      <form id="t-form" class="tt-form"></form>
-      <h3 class="tt-sec">Add or change a player</h3>
-      <p class="tt-note">Type an existing name to change that player’s Steam name or profile ID. A new player’s full match history is fetched with the next update.</p>
-      <form id="p-form" class="tt-form"></form>
+  </section>
+
+  <!-- ===================== Admin (organizers only; drawn by js/admin.js) ===================== -->
+  <section class="tt-page" id="admin" hidden>
+    <div class="tt-row-between">
+      <nav class="tt-sub" id="admin-nav" aria-label="Admin pages"></nav>
+      <span class="tt-label" id="admin-who"></span>
     </div>
-    <div class="tt-card" id="members-card" hidden>
-      <h2>Who can open this site</h2>
-      <p class="tt-note">Only people you invite can open the site. Create a link, send it to one person, and they sign in with it once. Each link works once, for 14 days. Only organizers see this.</p>
-      <div class="tt-btns"><button type="button" class="tt-btn primary" id="invite-btn">Create an invite link</button></div>
-      <p class="tt-note" id="invite-out" role="status"></p>
-      <div class="tt-scroll"><table id="members-table"><thead></thead><tbody></tbody></table></div>
-    </div>
+    <div id="admin-body"></div>
   </section>
 
   <!-- ===================== Data check ===================== -->

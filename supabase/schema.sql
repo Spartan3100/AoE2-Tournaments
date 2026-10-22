@@ -1,20 +1,26 @@
--- AoE2 Tournaments: who can open the site (invites), sign-in, "I'm", and game confirmations.
+-- AoE2 Tournaments: who can open the site (invites, roles), sign-in, "I'm", game confirmations and organizer changes.
 -- Paste this whole file into Supabase > SQL Editor > New query, and click Run. Safe to run again.
+--
+-- Roles: an Owner (email in public.admins) can do everything. Everyone else who joined with an invite link is in
+-- public.members with a role: 'organizer' (runs the tournaments in scope, or all of them when scope is null),
+-- 'player' (in standings, confirms their own games) or 'viewer' (can open the site only).
 
--- Organizers: whoever signs in with one of these emails can invite people, approve or reject games,
--- and free up player names. Add yourself at the end of this file.
+-- Owners: whoever signs in with one of these emails. Add yourself at the end of this file.
 create table if not exists public.admins (
   email text primary key
 );
 
--- People allowed to open the site (they joined with an invite link). Organizers are always allowed.
+-- People allowed to open the site (they joined with an invite link). Owners are always allowed.
 create table if not exists public.members (
   user_id uuid primary key references auth.users (id) on delete cascade,
   invite_code text,
   added_at timestamptz not null default now()
 );
+alter table public.members add column if not exists role text not null default 'player' check (role in ('organizer', 'player', 'viewer'));
+-- organizers only: the tournament_ids they run; null means every tournament
+alter table public.members add column if not exists scope text[];
 
--- Invite links: each code works once, for 14 days.
+-- Invite links: each code works once, for 14 days, and gives the role it was made with.
 create table if not exists public.invite_codes (
   code text primary key,
   created_by uuid default auth.uid(),
@@ -23,6 +29,7 @@ create table if not exists public.invite_codes (
   used_by uuid references auth.users (id) on delete set null,
   used_at timestamptz
 );
+alter table public.invite_codes add column if not exists role text not null default 'player' check (role in ('organizer', 'player', 'viewer'));
 
 -- The key the site's data files are encrypted with. Only members can read it.
 create table if not exists public.site_secret (
@@ -38,7 +45,7 @@ create table if not exists public.players_claim (
   created_at timestamptz not null default now()
 );
 
--- One answer per game and side: side 'a' and 'b' are the two players, 'org' is the organizer.
+-- One answer per game and side: side 'a' and 'b' are the two players, 'org' is an organizer.
 create table if not exists public.confirmations (
   tournament_id text not null,
   match_id text not null,
@@ -50,6 +57,20 @@ create table if not exists public.confirmations (
   primary key (tournament_id, match_id, side)
 );
 
+-- Organizer changes made on the site (tournaments, players, rules, civ pools). Everyone invited sees them
+-- straight away; the update job saves them into config/ on GitHub and then clears them (site/js/admin-logic.js).
+create table if not exists public.admin_changes (
+  id bigint generated always as identity primary key,
+  kind text not null,
+  payload jsonb not null check (jsonb_typeof(payload) = 'object' and length(payload::text) < 20000),
+  created_by uuid default auth.uid() references auth.users (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table public.admin_changes drop constraint if exists admin_changes_kind_check;
+alter table public.admin_changes add constraint admin_changes_kind_check check (kind in ('tournament', 'player', 'rules', 'civ_pool'));
+
+-- ---------------------------------------------------------------- who may do what
+-- is_admin() means Owner (the name is kept because older policies and the site use it).
 create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.admins where lower(email) = lower(coalesce(auth.jwt() ->> 'email', '')));
@@ -60,119 +81,202 @@ language sql stable security definer set search_path = public as $$
   select public.is_admin() or exists (select 1 from public.members where user_id = auth.uid());
 $$;
 
--- Organizer: make a new invite code (the site turns it into a link).
-create or replace function public.create_invite() returns text
+-- Owner, or an organizer of any tournament
+create or replace function public.is_organizer() returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.is_admin() or exists (select 1 from public.members where user_id = auth.uid() and role = 'organizer');
+$$;
+
+-- may run this tournament (change it, approve its games)
+create or replace function public.can_run(p_tid text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.is_admin() or exists (
+    select 1 from public.members where user_id = auth.uid() and role = 'organizer' and (scope is null or p_tid = any (scope))
+  );
+$$;
+
+-- may run every tournament, which includes starting new ones
+create or replace function public.can_run_all() returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.is_admin() or exists (select 1 from public.members where user_id = auth.uid() and role = 'organizer' and scope is null);
+$$;
+
+-- the signed-in person's role, for the site: {"role": "owner"|"organizer"|"player"|"viewer", "scope": [...]|null}
+create or replace function public.my_access() returns json
+language sql stable security definer set search_path = public as $$
+  select case when public.is_admin() then json_build_object('role', 'owner', 'scope', null)
+    else (select json_build_object('role', role, 'scope', scope) from public.members where user_id = auth.uid()) end;
+$$;
+
+-- Organizer: make a new invite code (the site turns it into a link). Only the owner can invite organizers.
+drop function if exists public.create_invite();
+create or replace function public.create_invite(p_role text default 'player') returns text
 language plpgsql security definer set search_path = public as $$
 declare c text;
 begin
-  if not public.is_admin() then raise exception 'Only organizers can invite people'; end if;
+  if not public.is_organizer() then raise exception 'Only organizers can invite people'; end if;
+  if p_role not in ('organizer', 'player', 'viewer') then raise exception 'Unknown role: %', p_role; end if;
+  if p_role = 'organizer' and not public.is_admin() then raise exception 'Only the owner can invite organizers'; end if;
   c := substr(replace(gen_random_uuid()::text, '-', ''), 1, 20);
-  insert into public.invite_codes (code, created_by) values (c, auth.uid());
+  insert into public.invite_codes (code, created_by, role) values (c, auth.uid(), p_role);
   return c;
 end $$;
 
 -- Invited person (signed in): use a code. Returns true when they can open the site.
 create or replace function public.redeem_invite(p_code text) returns boolean
 language plpgsql security definer set search_path = public as $$
+declare r text;
 begin
   if auth.uid() is null then return false; end if;
   if public.is_member() then return true; end if;
   update public.invite_codes set used_by = auth.uid(), used_at = now()
-    where code = p_code and used_by is null and expires_at > now();
+    where code = p_code and used_by is null and expires_at > now()
+    returning role into r;
   if not found then return false; end if;
-  insert into public.members (user_id, invite_code) values (auth.uid(), p_code) on conflict do nothing;
+  -- a new organizer runs no tournament until the owner picks some
+  insert into public.members (user_id, invite_code, role, scope)
+    values (auth.uid(), p_code, r, case when r = 'organizer' then '{}'::text[] end) on conflict do nothing;
   return true;
 end $$;
 
--- Organizer: everyone who can open the site, with the player they chose.
-create or replace function public.members_list() returns table (user_id uuid, player text, email text, added_at timestamptz)
+-- Organizer: links that haven't been used yet.
+create or replace function public.invites_list() returns table (code text, role text, created_at timestamptz, expires_at timestamptz)
 language plpgsql stable security definer set search_path = public as $$
 begin
-  if not public.is_admin() then return; end if;
-  return query
-    select m.user_id, c.player, u.email::text, m.added_at
-    from public.members m
-    left join public.players_claim c on c.user_id = m.user_id
-    left join auth.users u on u.id = m.user_id
-    order by m.added_at;
+  if not public.is_organizer() then return; end if;
+  return query select i.code, i.role, i.created_at, i.expires_at from public.invite_codes i
+    where i.used_by is null and i.expires_at > now() order by i.created_at desc;
 end $$;
 
--- Organizer: remove someone (they lose access and their "I'm" choice).
+create or replace function public.cancel_invite(p_code text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_organizer() then raise exception 'Only organizers can cancel invites'; end if;
+  delete from public.invite_codes where code = p_code and used_by is null;
+end $$;
+
+-- Organizer: everyone who can open the site (owners first), with their role and the player they chose.
+-- Only the owner sees email addresses.
+drop function if exists public.members_list();
+create or replace function public.members_list()
+returns table (user_id uuid, player text, name text, email text, role text, scope text[], added_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+declare own boolean := public.is_admin();
+begin
+  if not public.is_organizer() then return; end if;
+  return query
+    select u.id, c.player,
+      coalesce(u.raw_user_meta_data -> 'custom_claims' ->> 'global_name', u.raw_user_meta_data ->> 'full_name', u.raw_user_meta_data ->> 'name', '')::text,
+      case when own then u.email::text end, 'owner'::text, null::text[], u.created_at
+    from auth.users u
+    join public.admins a on lower(a.email) = lower(u.email)
+    left join public.players_claim c on c.user_id = u.id
+    union all
+    select m.user_id, c.player,
+      coalesce(u.raw_user_meta_data -> 'custom_claims' ->> 'global_name', u.raw_user_meta_data ->> 'full_name', u.raw_user_meta_data ->> 'name', '')::text,
+      case when own then u.email::text end, m.role, m.scope, m.added_at
+    from public.members m
+    left join auth.users u on u.id = m.user_id
+    left join public.players_claim c on c.user_id = m.user_id
+    where not exists (select 1 from public.admins a where lower(a.email) = lower(coalesce(u.email, '')))
+    order by 7;
+end $$;
+
+-- Owner: change someone's role. p_scope is for organizers: the tournament_ids they run, or null for all.
+create or replace function public.set_member_role(p_user uuid, p_role text, p_scope text[]) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception 'Only the owner can change roles'; end if;
+  if p_role not in ('organizer', 'player', 'viewer') then raise exception 'Unknown role: %', p_role; end if;
+  update public.members set role = p_role, scope = case when p_role = 'organizer' then p_scope end where user_id = p_user;
+  if not found then raise exception 'That person isn''t a member, so their role can''t be changed here'; end if;
+  if p_role = 'viewer' then delete from public.players_claim where user_id = p_user; end if;
+end $$;
+
+-- Owner: remove someone (they lose access and their "I'm" choice).
 create or replace function public.remove_member(p_user uuid) returns void
 language plpgsql security definer set search_path = public as $$
 begin
-  if not public.is_admin() then raise exception 'Only organizers can remove people'; end if;
+  if not public.is_admin() then raise exception 'Only the owner can remove people'; end if;
   delete from public.players_claim where user_id = p_user;
   delete from public.members where user_id = p_user;
 end $$;
 
-grant execute on function public.is_admin(), public.is_member(), public.create_invite(), public.redeem_invite(text),
-  public.members_list(), public.remove_member(uuid) to authenticated;
+grant execute on function public.is_admin(), public.is_member(), public.is_organizer(), public.can_run(text), public.can_run_all(),
+  public.my_access(), public.create_invite(text), public.redeem_invite(text), public.invites_list(), public.cancel_invite(text),
+  public.members_list(), public.set_member_role(uuid, text, text[]), public.remove_member(uuid) to authenticated;
 
+-- ---------------------------------------------------------------- table rules
 alter table public.admins enable row level security;
 alter table public.members enable row level security;
 alter table public.invite_codes enable row level security;
 alter table public.site_secret enable row level security;
 alter table public.players_claim enable row level security;
 alter table public.confirmations enable row level security;
+alter table public.admin_changes enable row level security;
 
--- Only members can read the data key, who is who, and the answers. (The update job uses the service key.)
+-- Only members can read the data key, who is who, the answers and pending changes. (The update job uses the service key.)
 drop policy if exists "members read the key" on public.site_secret;
 create policy "members read the key" on public.site_secret for select to authenticated using (public.is_member());
 drop policy if exists "see yourself" on public.members;
 create policy "see yourself" on public.members for select to authenticated using (user_id = auth.uid() or public.is_admin());
 drop policy if exists "organizers see invites" on public.invite_codes;
-create policy "organizers see invites" on public.invite_codes for select to authenticated using (public.is_admin());
+create policy "organizers see invites" on public.invite_codes for select to authenticated using (public.is_organizer());
 
 drop policy if exists "read claims" on public.players_claim;
 create policy "read claims" on public.players_claim for select to authenticated using (public.is_member());
 drop policy if exists "read confirmations" on public.confirmations;
 create policy "read confirmations" on public.confirmations for select to authenticated using (public.is_member());
 
--- Members can set, change or remove which player they are; organizers can remove anyone's.
+-- Members (not viewers) can set, change or remove which player they are; the owner can remove anyone's.
 drop policy if exists "claim yourself" on public.players_claim;
-create policy "claim yourself" on public.players_claim for insert to authenticated with check (user_id = auth.uid() and public.is_member());
+create policy "claim yourself" on public.players_claim for insert to authenticated with check (
+  user_id = auth.uid() and public.is_member()
+  and not exists (select 1 from public.members m where m.user_id = auth.uid() and m.role = 'viewer')
+);
 drop policy if exists "change your claim" on public.players_claim;
-create policy "change your claim" on public.players_claim for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid() and public.is_member());
+create policy "change your claim" on public.players_claim for update to authenticated using (user_id = auth.uid()) with check (
+  user_id = auth.uid() and public.is_member()
+  and not exists (select 1 from public.members m where m.user_id = auth.uid() and m.role = 'viewer')
+);
 drop policy if exists "remove a claim" on public.players_claim;
 create policy "remove a claim" on public.players_claim for delete to authenticated using (user_id = auth.uid() or public.is_admin());
 
--- Players answer for themselves only; the organizer answers as 'org'.
+-- Players answer for themselves only; an organizer of that tournament answers as 'org'.
 drop policy if exists "answer" on public.confirmations;
 create policy "answer" on public.confirmations for insert to authenticated with check (
   user_id = auth.uid() and public.is_member() and (
-    (side = 'org' and public.is_admin())
+    (side = 'org' and public.can_run(tournament_id))
     or (side in ('a', 'b') and exists (select 1 from public.players_claim c where c.user_id = auth.uid() and c.player = confirmations.player))
   )
 );
 drop policy if exists "change answer" on public.confirmations;
 create policy "change answer" on public.confirmations for update to authenticated using (
-  (side = 'org' and public.is_admin())
+  (side = 'org' and public.can_run(tournament_id))
   or (side in ('a', 'b') and exists (select 1 from public.players_claim c where c.user_id = auth.uid() and c.player = confirmations.player))
 ) with check (
   user_id = auth.uid() and public.is_member() and (
-    (side = 'org' and public.is_admin())
+    (side = 'org' and public.can_run(tournament_id))
     or (side in ('a', 'b') and exists (select 1 from public.players_claim c where c.user_id = auth.uid() and c.player = confirmations.player))
   )
 );
 
--- Organizer changes made on the site (new or edited tournaments and players). Everyone invited sees them
--- straight away; the update job saves them into config/ on GitHub and then clears them (site/js/admin-logic.js).
-create table if not exists public.admin_changes (
-  id bigint generated always as identity primary key,
-  kind text not null check (kind in ('tournament', 'player')),
-  payload jsonb not null check (jsonb_typeof(payload) = 'object' and length(payload::text) < 20000),
-  created_by uuid default auth.uid() references auth.users (id) on delete set null,
-  created_at timestamptz not null default now()
-);
-alter table public.admin_changes enable row level security;
+-- Organizers change the tournaments they run (organizers of every tournament can also start new ones), and any
+-- organizer can add or change players. They can undo their own changes; the owner can undo anyone's.
 drop policy if exists "read changes" on public.admin_changes;
 create policy "read changes" on public.admin_changes for select to authenticated using (public.is_member());
 drop policy if exists "organizers add changes" on public.admin_changes;
-create policy "organizers add changes" on public.admin_changes for insert to authenticated with check (public.is_admin() and created_by = auth.uid());
+create policy "organizers add changes" on public.admin_changes for insert to authenticated with check (
+  created_by = auth.uid() and (
+    (kind = 'player' and public.is_organizer())
+    or (kind in ('tournament', 'rules', 'civ_pool') and (public.can_run(payload ->> 'tournament_id') or public.can_run_all()))
+  )
+);
 drop policy if exists "organizers cancel changes" on public.admin_changes;
-create policy "organizers cancel changes" on public.admin_changes for delete to authenticated using (public.is_admin());
+create policy "organizers cancel changes" on public.admin_changes for delete to authenticated using (
+  public.is_organizer() and (created_by = auth.uid() or public.is_admin())
+);
 
--- Last step: make yourself an organizer. Replace the address with the email on the account you'll sign in with
+-- Last step: make yourself the owner. Replace the address with the email on the account you'll sign in with
 -- (for Discord, your Discord account's email), then run just this line.
 -- insert into public.admins (email) values ('you@example.com') on conflict do nothing;

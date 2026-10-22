@@ -26,9 +26,9 @@ Your site's address will be **https://YOUR-GITHUB-NAME.github.io/aoe2-tournament
 
 1. Go to [supabase.com](https://supabase.com), sign up and create a **New project** (any name, a strong database password, the region nearest you). Wait about two minutes.
 2. **SQL Editor > New query.** Paste all of `supabase/schema.sql` and click **Run**.
-3. Make yourself the organizer. In a new query, run this with your **Discord account's email**:
+3. Make yourself the owner. In a new query, run this with your **Discord account's email**:
    `insert into public.admins (email) values ('you@example.com') on conflict do nothing;`
-   (Add other organizers the same way.)
+   (Everyone else gets their role on the site: **Admin** tab > **People**.)
 
 ### 3. Turn on "Sign in with Discord"
 
@@ -46,11 +46,17 @@ Your site's address will be **https://YOUR-GITHUB-NAME.github.io/aoe2-tournament
 
 ### 5. Invite your friends
 
-1. Open the site and **Sign in with Discord**. As the organizer, you're let straight in. Choose yourself under **I'm**.
-2. **All tournaments** tab > **Who can open this site** > **Create an invite link**. Send that link to one friend (each link works once, for 14 days). Repeat for each friend.
-3. They open the link, sign in with Discord, choose themselves under **I'm**, and they're in for good on that account.
+1. Open the site and **Sign in with Discord**. As the owner, you're let straight in. Choose yourself under **I'm**.
+2. **Admin** tab > **People** > **Invite someone**: pick the role they join with (player, viewer or organizer) and **Create invite link**. Send that link to one friend (each link works once, for 14 days). Repeat for each friend.
+3. They open the link, sign in with Discord, choose themselves under **I'm** (viewers don't), and they're in for good on that account.
 
-To remove someone: same card, **Remove**. They can't open the site any more. To also make sure any data they saved in their browser stops working, change the key: in Supabase run `update public.site_secret set key = encode(decode(replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-',''),'hex'),'base64');` and then run the workflow.
+**Roles** (Admin > People, owner only):
+- **Owner:** everything, including roles. Set by the `admins` table in Supabase (step 2.3).
+- **Organizer:** runs the tournaments you give them, or every tournament (only those can start new ones): settings, players, civ pools, rules, approving games, inviting players and viewers.
+- **Player:** chooses who they are under "I'm" and confirms their own games.
+- **Viewer:** can open the site and follow along.
+
+To remove someone: same page, **Remove**. They can't open the site any more. To also make sure any data they saved in their browser stops working, change the key: in Supabase run `update public.site_secret set key = encode(decode(replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-',''),'hex'),'base64');` and then run the workflow.
 
 *Email links instead of Discord:* Supabase's built-in email only reaches members of your Supabase organization, so email sign-in needs your own mail server: **Authentication > Emails > SMTP Settings** (for example Gmail: host `smtp.gmail.com`, port 587, your address and an [app password](https://myaccount.google.com/apppasswords)). Then set `"email": true` in `config/supabase.json`.
 
@@ -61,11 +67,17 @@ To remove someone: same card, **Remove**. They can't open the site any more. To 
 
 ## Running the tournament
 
-**On the site (organizers):** **All tournaments** tab > **Manage tournaments**. Add a tournament or change one (name, status, dates, format, playoff size, players), make its round-robin schedule, and add or change players. Everyone invited sees a change straight away; the next update writes it into `config/` on GitHub and it leaves the "waiting" list. **Undo** takes back a change that hasn't been written yet. A schedule can only be remade before any game of that tournament has been played.
+**On the site:** the **Admin** tab (organizers only) has four pages:
+- **Set up a tournament:** name, dates, players, format (round robin with or without playoffs), playoff size and series length, how maps are picked, civ pools (pick them yourself, random, balanced random, same for everyone, or copied from another tournament) and rules. The rules are written from those settings; edit any line. The summary on the right shows players, games and the bracket as you go.
+- **Civ pools:** one player at a time on a grid of every civ, filterable by style, with presets.
+- **Manage tournaments:** pick a tournament on the left: games waiting for approval, status, settings, players (adding one after games are played adds their games; removing one drops their unplayed games), schedule, civ pools, rules and who runs it.
+- **People:** invites, roles, and which tournaments each organizer runs.
 
-*Already set up before this was added?* Run `supabase/schema.sql` again in the Supabase SQL Editor (it's safe to run again) to create the table it uses.
+Everyone invited sees a change straight away; the next update writes it into `config/` on GitHub and it leaves the "waiting" list. **Undo** takes back a change that hasn't been written yet.
 
-Everything else (rules, civ pools, fixing a result) lives in `config/` and is edited on GitHub (pencil icon), or by asking Claude Code to do it:
+*Already set up before the Admin tab was added?* Run all of `supabase/schema.sql` again in the Supabase SQL Editor. It's safe to run again: everyone who already joined becomes a player, and you stay the owner.
+
+Everything also lives in `config/` and is edited on GitHub (pencil icon), or by asking Claude Code to do it:
 
 | File | What it holds |
 |---|---|
@@ -78,9 +90,8 @@ Everything else (rules, civ pools, fixing a result) lives in `config/` and is ed
 | `supabase.json` | The database address and public key (not secret) |
 
 - **A tournament game is detected** when two players in an active tournament play an online 1v1 that fills an open game in `matches.json` (or the next game of their playoff series). It appears on the Home tab.
-- **It counts** once both players confirm it, or the organizer approves it. The site shows it straight away, and the next update saves it into `config/matches.json`.
+- **It counts** once both players confirm it, or an organizer of that tournament approves it. The site shows it straight away, and the next update saves it into `config/matches.json`.
 - **Fixing a result:** edit that game in `config/matches.json`.
-- **Rules and civ pools for a new tournament:** add rows with its `tournament_id` (shown in `config/tournaments.json`, e.g. `t2`) to `rules.json` and `civ_pool.json`.
 - **Someone chose the wrong name under "I'm":** Supabase > **Table Editor > players_claim**, delete the row.
 
 ## How it works
