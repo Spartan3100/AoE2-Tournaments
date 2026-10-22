@@ -1,0 +1,666 @@
+<title>Tournament Admin Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: the live site's header and tab row, an Admin tab with four pages, and a prototype bar that switches page and layout. */
+:root {
+  --bg: #f6f5f1; --panel: #ffffff; --fg: #1f1e1b; --muted: #6b6860; --line: #e3e0d8; --soft: #efede7;
+  --ok: #2e7d4f; --warn: #b7791f; --bad: #c0392b; --accent: #2f6fbd; --accent-soft: #e6eef8;
+  --proto: #3b3a36; --proto-fg: #f6f5f1;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --serif: Georgia, "Times New Roman", serif;
+  --r: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1c1b19; --panel: #262522; --fg: #ece9e2; --muted: #a6a198; --line: #3a3833; --soft: #2f2e2a;
+    --ok: #5cc18a; --warn: #e0a84a; --bad: #ef6f62; --accent: #7aa7e6; --accent-soft: #24303f;
+    --proto: #ece9e2; --proto-fg: #1c1b19; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1c1b19; --panel: #262522; --fg: #ece9e2; --muted: #a6a198; --line: #3a3833; --soft: #2f2e2a;
+  --ok: #5cc18a; --warn: #e0a84a; --bad: #ef6f62; --accent: #7aa7e6; --accent-soft: #24303f;
+  --proto: #ece9e2; --proto-fg: #1c1b19; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* prototype bar */
+.proto { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--proto); color: var(--proto-fg); padding-block: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--proto); }
+.proto-in { max-width: 1240px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.proto b { font-weight: 600; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; opacity: .75; }
+.seg { display: inline-flex; border: 1px solid currentColor; border-radius: 999px; overflow: hidden; }
+.seg button { background: none; border: 0; padding: 3px 12px; cursor: pointer; color: inherit; font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--proto-fg); color: var(--proto); }
+.proto .optname { font-size: 13px; opacity: .85; }
+.proto .spacer { flex: 1; }
+.proto .pbtn { background: var(--proto-fg); color: var(--proto); border: 0; border-radius: 999px; padding: 4px 14px; cursor: pointer; font-weight: 600; font-size: 13px; }
+
+/* site shell */
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 20px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 20px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.title { font-family: var(--serif); font-weight: 400; font-size: 26px; margin: 0; }
+.who { margin-left: auto; color: var(--muted); font-size: 12px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); }
+.tabs span { padding: 6px 10px; color: var(--muted); border-bottom: 2px solid transparent; }
+.tabs span.on { color: var(--fg); border-bottom-color: var(--fg); }
+.sub { display: flex; flex-wrap: wrap; gap: 4px; }
+.sub button { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; color: var(--muted); }
+.sub button[aria-current="page"] { color: var(--fg); border-color: var(--fg); background: var(--panel); }
+.ex { font-size: 12px; color: var(--muted); }
+
+/* building blocks */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; min-width: 0; }
+.card h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.card h3 { font-size: 14px; font-weight: 600; margin: 0; }
+.note { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 12px; }
+.f { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.f > span { color: var(--muted); font-size: 12px; }
+.f input, .f select, .f textarea, .in { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 5px 8px; min-width: 0; width: 100%; }
+textarea { resize: vertical; }
+.btn { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 5px 12px; cursor: pointer; }
+.btn.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.btn.small { padding: 2px 8px; font-size: 12px; }
+.btn.link { border: 0; background: none; color: var(--accent); padding: 0; }
+.btn:disabled { opacity: .45; cursor: default; }
+.pill { display: inline-block; font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; color: var(--muted); white-space: nowrap; }
+.pill.ok { color: var(--ok); border-color: var(--ok); }
+.pill.warn { color: var(--warn); border-color: var(--warn); }
+.pill.acc { color: var(--accent); border-color: var(--accent); }
+.chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; cursor: pointer; background: none; font-size: 13px; }
+.chip[aria-pressed="true"] { border-color: var(--fg); background: var(--soft); }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+th { color: var(--muted); font-size: 12px; font-weight: 600; }
+.scroll { overflow-x: auto; }
+.hint { background: var(--accent-soft); border-radius: var(--r); padding: 8px 12px; font-size: 13px; }
+
+/* wizard */
+.steps { display: flex; flex-wrap: wrap; gap: 6px; counter-reset: s; }
+.steps button { display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 4px 6px; cursor: pointer; color: var(--muted); }
+.steps button .n { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+.steps button.done .n { background: var(--soft); }
+.steps button[aria-current="step"] { color: var(--fg); font-weight: 600; }
+.steps button[aria-current="step"] .n { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 20rem; gap: 16px; align-items: start; }
+.sticky { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 56px); }
+@media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } .sticky { position: static; } }
+.tpl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 12px; }
+.tpl button { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.tpl button[aria-pressed="true"] { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+.tpl strong { font-size: 14px; }
+.tpl small { color: var(--muted); }
+details.sec { border-top: 1px solid var(--line); padding-top: 10px; }
+details.sec summary { cursor: pointer; font-weight: 600; list-style-position: inside; }
+details.sec[open] summary { margin-bottom: 10px; }
+.rules { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.rules li { display: grid; grid-template-columns: 8rem minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.rules li b { font-weight: 600; }
+.rules li .tools { display: flex; gap: 2px; }
+.rules.read li { grid-template-columns: 8rem minmax(0, 1fr); }
+@media (max-width: 520px) { .rules li, .rules.read li { grid-template-columns: minmax(0, 1fr); } }
+.bracket { display: flex; gap: 12px; overflow-x: auto; }
+.bracket .col { display: flex; flex-direction: column; justify-content: space-around; gap: 8px; min-width: 9rem; }
+.bracket .m { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 12px; background: var(--panel); }
+.bracket .m div + div { border-top: 1px solid var(--line); }
+.bracket .col > span { font-size: 12px; color: var(--muted); }
+
+/* civ pools */
+.civgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); gap: 6px; }
+.civ { display: flex; flex-direction: column; align-items: flex-start; gap: 0; text-align: left; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: var(--panel); cursor: pointer; }
+.civ small { color: var(--muted); font-size: 11px; }
+.civ[aria-pressed="true"] { border-color: var(--fg); background: var(--soft); box-shadow: inset 3px 0 0 var(--fg); }
+.civ:disabled { opacity: .4; cursor: default; }
+.count { font-variant-numeric: tabular-nums; font-weight: 600; }
+.count.full { color: var(--ok); }
+.count.over { color: var(--bad); }
+.matrix td:not(:first-child), .matrix th:not(:first-child) { text-align: center; }
+.matrix tbody tr:hover td { background: var(--soft); }
+.matrix th { position: sticky; top: 0; background: var(--panel); }
+.tall { max-height: 30rem; overflow: auto; }
+.preset { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 10px; }
+.preset button { text-align: left; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.preset button small { color: var(--muted); }
+.plist { display: flex; flex-direction: column; gap: 10px; }
+.plist .p { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: 8px; align-items: start; }
+@media (max-width: 520px) { .plist .p { grid-template-columns: minmax(0, 1fr); } }
+.minis { display: flex; flex-wrap: wrap; gap: 4px; }
+.mini { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; background: var(--panel); cursor: pointer; }
+.mini:hover { border-color: var(--bad); color: var(--bad); text-decoration: line-through; }
+
+/* manage */
+.mlayout { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 760px) { .mlayout { grid-template-columns: minmax(0, 1fr); } }
+.tlist { display: flex; flex-direction: column; gap: 6px; }
+.tlist button { text-align: left; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.tlist button[aria-current="true"] { border-color: var(--fg); }
+.tlist small { color: var(--muted); }
+.bar { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--ok); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); gap: 12px; }
+.kpi .v { font-family: var(--serif); font-size: 24px; font-variant-numeric: tabular-nums; }
+.kpi .l { color: var(--muted); font-size: 12px; }
+.itabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); }
+.itabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 10px; cursor: pointer; color: var(--muted); }
+.itabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
+.attn { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.attn li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 6px; padding: 6px 10px; }
+.secrow { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; border-top: 1px solid var(--line); padding-top: 12px; flex-wrap: wrap; }
+
+/* people */
+.pcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 10px; }
+.pcard { text-align: left; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 12px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.pcard[aria-pressed="true"] { border-color: var(--fg); }
+.pcard small { color: var(--muted); }
+.roles { display: grid; gap: 8px; }
+.roles label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; cursor: pointer; }
+.roles label:has(input:checked) { border-color: var(--fg); background: var(--soft); }
+.roles label small { grid-column: 2; color: var(--muted); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 12px; align-items: start; }
+.col h3 { display: flex; justify-content: space-between; }
+.person { display: flex; justify-content: space-between; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--panel); }
+.person small { color: var(--muted); display: block; }
+.legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 8px; }
+.legend div { font-size: 12px; color: var(--muted); }
+.legend b { color: var(--fg); display: block; font-size: 13px; }
+
+/* choices panel */
+.panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(28rem, 100%); background: var(--panel); border-left: 1px solid var(--line); z-index: 40; display: flex; flex-direction: column; gap: 12px; overflow: auto; padding-block: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)); padding-left: 16px; padding-right: max(16px, env(safe-area-inset-right, 0px)); box-shadow: 0 0 24px rgba(0,0,0,.18); }
+.panel .pg { border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 6px 14px; border-radius: 999px; font-size: 13px; z-index: 50; }
+@media (prefers-reduced-motion: no-preference) { .civ, .chip, .btn { transition: background .12s, border-color .12s; } }
+</style>
+
+<div class="proto" role="region" aria-label="Prototype controls">
+  <div class="proto-in">
+    <b>Prototype</b>
+    <span class="optname">Layout for this page:</span>
+    <div class="seg" id="opt-seg" role="group" aria-label="Layout option"></div>
+    <span class="optname" id="opt-name"></span>
+    <span class="spacer"></span>
+    <button class="pbtn" id="choices-btn" type="button">Your choices</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="top">
+    <h1 class="title">AoE2 Tournaments</h1>
+    <span class="who">Signed in as Ryan · owner</span>
+  </div>
+  <nav class="tabs" aria-label="Site tabs"><span>Home</span><span>Standings</span><span>Playoffs</span><span>Schedule</span><span>Civs &amp; maps</span><span>Format</span><span>Player profiles</span><span>Head to head</span><span>Match review</span><span>All tournaments</span><span class="on">Admin</span></nav>
+  <div class="row" style="justify-content: space-between">
+    <nav class="sub" id="pages" aria-label="Admin pages"></nav>
+    <span class="ex">Example data. Only organizers see this tab.</span>
+  </div>
+  <main id="page"></main>
+</div>
+
+<aside class="panel" id="panel" hidden aria-label="Your choices">
+  <div class="row" style="justify-content: space-between"><h2 style="margin:0;font-size:16px">Your choices</h2><button class="btn small" id="panel-close" type="button">Close</button></div>
+  <p class="note" style="margin:0">Pick a layout on each page with the switch at the top, add notes, then generate a prompt and paste it back to Claude.</p>
+  <div id="panel-pages" class="stack"></div>
+  <div class="f"><span>Anything else</span><textarea id="note-general" rows="3" placeholder="e.g. keep invites on the People page"></textarea></div>
+  <button class="btn primary" id="gen" type="button">Generate prompt</button>
+  <textarea id="prompt-out" class="in" rows="12" readonly hidden></textarea>
+  <button class="btn" id="copy" type="button" hidden>Copy prompt</button>
+</aside>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+  // ------------------------------------------------------------------ example data (from this site's config)
+  const STYLES = {"Armenians":"Infantry","Aztecs":"Infantry","Bengalis":"Elephant","Berbers":"Cavalry","Bohemians":"Gunpowder","Britons":"Archer","Bulgarians":"Infantry","Burgundians":"Cavalry","Burmese":"Monk","Byzantines":"Defensive","Celts":"Infantry","Chinese":"Archer","Cumans":"Cavalry","Danes":"Unclassified","Dravidians":"Infantry","Ethiopians":"Archer","Franks":"Cavalry","Georgians":"Cavalry","Goths":"Infantry","Gurjaras":"Cavalry","Hindustanis":"Camel","Huns":"Cavalry","Inca":"Infantry","Italians":"Archer","Japanese":"Infantry","Jurchens":"Cavalry","Khitans":"Cavalry archer","Khmer":"Siege","Koreans":"Defensive","Lithuanians":"Cavalry","Magyars":"Cavalry","Malay":"Naval","Malians":"Infantry","Mapuche":"Unclassified","Maya":"Archer","Mongols":"Cavalry archer","Muisca":"Unclassified","Persians":"Cavalry","Poles":"Cavalry","Portuguese":"Naval","Romans":"Infantry","Saracens":"Camel","Saxons":"Unclassified","Shu":"Archer","Sicilians":"Infantry","Slavs":"Infantry","Spanish":"Gunpowder","Tatars":"Cavalry archer","Teutons":"Infantry","Tupi":"Unclassified","Turks":"Gunpowder","Varangians":"Cavalry","Vietnamese":"Archer","Vikings":"Infantry","Wei":"Cavalry","Wu":"Unclassified"};
+  const CIVS = Object.keys(STYLES);
+  const STYLE_LIST = ['All', 'Infantry', 'Cavalry', 'Archer', 'Cavalry archer', 'Gunpowder', 'Camel', 'Defensive', 'Other'];
+  const styleOf = (c) => (['Elephant', 'Monk', 'Naval', 'Siege', 'Unclassified'].includes(STYLES[c]) ? 'Other' : STYLES[c]);
+  const PLAYERS = [
+    { name: 'Christopher', steam: 'Spartan1196' }, { name: 'Daniel', steam: 'Dirtydan44' }, { name: 'Joe', steam: 'Killer Wambat' },
+    { name: 'Nathan', steam: 'MongolMania' }, { name: 'Ryan', steam: 'Spartan3100' },
+  ];
+  const MAPS = ['Arabia', 'Arena', 'Black Forest', 'Islands', 'Nomad', 'Gold Rush', 'Hideout', 'Megarandom'];
+  const ROLES = {
+    owner: ['Owner', 'Everything, including making people organizers. Can’t be removed.'],
+    organizer: ['Organizer', 'Runs the tournaments you give them, or all of them: settings, schedule, civ pools, approving games, inviting players.'],
+    player: ['Player', 'Appears in standings and confirms their own games.'],
+    viewer: ['Viewer', 'Can open the site and follow along. Not in any tournament.'],
+  };
+  const TOURNEYS = [
+    { id: 't1', name: 'Fall 2026 Tournament', status: 'Active', start: '2026-10-19', played: 1, total: 10, players: 5 },
+    { id: 't0', name: 'Summer 2026 Cup', status: 'Completed', start: '2026-07-06', played: 14, total: 14, players: 5 },
+  ];
+
+  // deterministic "random" so the example doesn't change on every click
+  let seed = 7;
+  const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  const shuffle = (a) => { const b = a.slice(); for (let i = b.length - 1; i > 0; i -= 1) { const j = Math.floor(rnd() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+
+  const S = {
+    page: 'setup', step: 0, filter: 'All', civPlayer: 'Christopher', manageT: 't1', manageTab: 'overview', person: 'Christopher',
+    picks: { setup: 'A', civs: 'A', manage: 'A', people: 'A' }, notes: { setup: '', civs: '', manage: '', people: '', general: '' },
+    t: { template: 'rrpo', name: 'Winter 2026', start: '2026-12-01', end: '', players: ['Christopher', 'Daniel', 'Joe', 'Nathan', 'Ryan'], bo: 3, advance: 4, decider: 'Arabia', mapPick: 'seeds', poolSize: 15, poolMethod: 'organizer', organizers: ['Ryan'] },
+    pools: {},
+    rules: null, rulesEdited: false,
+    people: [
+      { name: 'Ryan', discord: 'spartan3100', role: 'owner', scope: 'all', joined: '2026-10-22' },
+      { name: 'Christopher', discord: 'spartan1196', role: 'organizer', scope: ['t1'], joined: '2026-10-22' },
+      { name: 'Daniel', discord: 'dirtydan44', role: 'player', scope: [], joined: '2026-10-23' },
+      { name: 'Joe', discord: 'killerwambat', role: 'player', scope: [], joined: '2026-10-23' },
+      { name: 'Nathan', discord: 'mongolmania', role: 'player', scope: [], joined: '2026-10-24' },
+      { name: 'Example viewer', discord: 'a_friend', role: 'viewer', scope: [], joined: '2026-10-25' },
+    ],
+    invites: [{ code: 'k3x9…', made: '2026-10-25', expires: '2026-11-08', role: 'player' }],
+  };
+  PLAYERS.forEach((p) => { S.pools[p.name] = shuffle(CIVS).slice(0, 15); });
+  try { const saved = JSON.parse(localStorage.getItem('tt-proto') || 'null'); if (saved) { Object.assign(S.picks, saved.picks || {}); Object.assign(S.notes, saved.notes || {}); } } catch (e) { /* storage blocked */ }
+  const persist = () => { try { localStorage.setItem('tt-proto', JSON.stringify({ picks: S.picks, notes: S.notes })); } catch (e) { /* storage blocked */ } };
+
+  const PAGES = {
+    setup: { label: 'Set up a tournament', opts: { A: 'Step by step', B: 'One page with live preview', C: 'Start from a template' } },
+    civs: { label: 'Civ pools', opts: { A: 'Civ grid, one player at a time', B: 'Everyone in one table', C: 'Presets first, then tweak' } },
+    manage: { label: 'Manage a tournament', opts: { A: 'Overview with tabs', B: 'List and detail' } },
+    people: { label: 'People', opts: { A: 'Table', B: 'Cards with an edit panel', C: 'Grouped by role' } },
+  };
+
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const $ = (id) => document.getElementById(id);
+  const fmtDate = (d) => (d ? new Date(d + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '');
+  let toastT;
+  const toast = (t) => { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 1800); };
+
+  // ------------------------------------------------------------------ tournament maths (same shape as the site's calcs)
+  const nPlayers = () => S.t.players.length;
+  const poolGames = () => (S.t.template === 'po' ? 0 : (nPlayers() * (nPlayers() - 1)) / 2);
+  const adv = () => (S.t.template === 'rr' ? 0 : Math.min(Number(S.t.advance) || nPlayers(), nPlayers()));
+  function bracketRounds() {
+    const n = adv();
+    if (n < 2) return [];
+    let size = 1; while (size < n) size *= 2;
+    let order = [1];
+    while (order.length < size) { const s = order.length * 2 + 1; order = order.flatMap((x) => [x, s - x]); }
+    let slots = order.map((s) => (s <= n ? `Seed ${s}` : null));
+    const rounds = [];
+    let r = 1;
+    while (slots.length > 1) {
+      const left = slots.length;
+      const real = [];
+      const next = [];
+      for (let i = 0; i < slots.length; i += 2) {
+        const a = slots[i], b = slots[i + 1];
+        if (!a || !b) { next.push(a || b); continue; }
+        real.push([a, b]);
+        next.push(null);
+      }
+      const name = left === 2 ? 'Final' : left === 4 ? 'Semifinals' : left === 8 ? 'Quarterfinals' : r === 1 && real.length <= left / 4 ? 'Play-in' : `Round of ${left}`;
+      rounds.push({ name, matches: real });
+      let k = 0;
+      slots = next.map((x) => (x === null ? `Winner ${name === 'Play-in' ? 'play-in' : name.replace(/s$/, '').toLowerCase()} ${++k}` : x));
+      r += 1;
+    }
+    return rounds;
+  }
+  function makeRules() {
+    const t = S.t, out = [];
+    const n = nPlayers();
+    if (t.template !== 'po') {
+      out.push(['Pool play', 'Round robin. Everyone plays every other player once, one game each.']);
+      out.push(['Pool standings', 'Wins, then fewest losses, then head-to-head result.']);
+    }
+    if (t.template !== 'rr') {
+      const a = adv();
+      out.push(['Playoffs', `${a >= n ? `All ${n} players advance` : `The top ${a} advance`}${t.template === 'po' ? ', seeded by the organizer' : ', seeded by pool play standings'}. Every series is best of ${t.bo}.`]);
+      bracketRounds().forEach((r) => {
+        const ms = r.matches.map(([x, y]) => `${x} vs ${y}`.toLowerCase());
+        const txt = ms.length > 1 ? `${ms.slice(0, -1).join(', ')} and ${ms[ms.length - 1]}` : ms[0];
+        out.push([r.name, txt.charAt(0).toUpperCase() + txt.slice(1) + '.']);
+      });
+    }
+    if (t.mapPick === 'seeds') {
+      out.push(['Game 1', 'The higher seed picks the map.']);
+      out.push(['Game 2', 'The lower seed picks the map.']);
+      if (Number(t.bo) >= 3) out.push([`Game ${t.bo} (if needed)`, `${t.decider}.`]);
+    } else if (t.mapPick === 'fixed') out.push(['Maps', `Every game is on ${t.decider}.`]);
+    else out.push(['Maps', 'The loser of the previous game picks the next map. Game 1 is on ' + t.decider + '.']);
+    if (t.poolSize) out.push(['Civs', `Each player plays from their own pool of ${t.poolSize} civs, shown on the Civs & maps tab.`]);
+    return out;
+  }
+  const rules = () => (S.rulesEdited && S.rules ? S.rules : (S.rules = makeRules()));
+
+  // ------------------------------------------------------------------ setup sections (shared by the three layouts)
+  const sec = {
+    basics: () => `
+      <div class="grid2">
+        <label class="f"><span>Name</span><input id="t-name" data-k="name" value="${esc(S.t.name)}"></label>
+        <label class="f"><span>Start date</span><input id="t-start" type="date" data-k="start" value="${esc(S.t.start)}"></label>
+        <label class="f"><span>End date (optional)</span><input id="t-end" type="date" data-k="end" value="${esc(S.t.end)}"></label>
+      </div>
+      <div class="f"><span>Who runs it</span><div class="row">${S.people.filter((p) => p.role !== 'viewer').map((p) => `<button type="button" class="chip" data-org="${esc(p.name)}" aria-pressed="${S.t.organizers.includes(p.name)}">${esc(p.name)}</button>`).join('')}</div>
+      <p class="note">These people can change this tournament, approve its games and invite its players. Owners can always.</p></div>`,
+    players: () => `
+      <div class="row" style="justify-content:space-between"><span class="note" style="margin:0"><span class="count">${nPlayers()}</span> players · ${poolGames()} pool games</span>
+      <span class="row"><button type="button" class="btn small" data-act="all-players">Everyone</button><button type="button" class="btn small" data-act="no-players">Nobody</button><button type="button" class="btn small" data-act="add-player">+ New player</button></span></div>
+      <div class="row">${PLAYERS.map((p) => `<button type="button" class="chip" data-player="${esc(p.name)}" aria-pressed="${S.t.players.includes(p.name)}">${esc(p.name)} <small style="color:var(--muted)">${esc(p.steam)}</small></button>`).join('')}</div>`,
+    format: () => `
+      <div class="grid2">
+        <label class="f"><span>Format</span><select id="t-template" data-k="template">
+          <option value="rrpo" ${S.t.template === 'rrpo' ? 'selected' : ''}>Round robin, then playoffs</option>
+          <option value="rr" ${S.t.template === 'rr' ? 'selected' : ''}>Round robin only</option>
+          <option value="po" ${S.t.template === 'po' ? 'selected' : ''}>Playoffs only</option></select></label>
+        <label class="f"><span>Playoff series</span><select id="t-bo" data-k="bo" ${S.t.template === 'rr' ? 'disabled' : ''}>${[1, 3, 5, 7].map((n) => `<option value="${n}" ${Number(S.t.bo) === n ? 'selected' : ''}>Best of ${n}</option>`).join('')}</select></label>
+        <label class="f"><span>Players who make the playoffs</span><select id="t-adv" data-k="advance" ${S.t.template === 'rr' ? 'disabled' : ''}>${Array.from({ length: Math.max(0, nPlayers() - 1) }, (_, i) => i + 2).map((n) => `<option value="${n}" ${adv() === n ? 'selected' : ''}>${n === nPlayers() ? `All ${n}` : `Top ${n}`}</option>`).join('')}</select></label>
+        <label class="f"><span>How maps are picked</span><select id="t-mappick" data-k="mapPick">
+          <option value="seeds" ${S.t.mapPick === 'seeds' ? 'selected' : ''}>Seeds pick, decider is fixed</option>
+          <option value="loser" ${S.t.mapPick === 'loser' ? 'selected' : ''}>Loser picks next map</option>
+          <option value="fixed" ${S.t.mapPick === 'fixed' ? 'selected' : ''}>One map for every game</option></select></label>
+        <label class="f"><span>${S.t.mapPick === 'seeds' ? 'Decider map' : S.t.mapPick === 'fixed' ? 'Map' : 'Game 1 map'}</span><select id="t-decider" data-k="decider">${MAPS.map((m) => `<option ${S.t.decider === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
+      </div>
+      ${bracketHtml()}`,
+    civs: () => `
+      <div class="grid2">
+        <label class="f"><span>Civs per player</span><select id="t-pool" data-k="poolSize">${[0, 5, 10, 15, 20, 25].map((n) => `<option value="${n}" ${Number(S.t.poolSize) === n ? 'selected' : ''}>${n ? n + ' civs' : 'No pools (any civ)'}</option>`).join('')}</select></label>
+        <label class="f"><span>Fill the pools</span><select id="t-poolmethod" data-k="poolMethod" ${!Number(S.t.poolSize) ? 'disabled' : ''}>
+          <option value="organizer" ${S.t.poolMethod === 'organizer' ? 'selected' : ''}>I’ll pick on the Civ pools page</option>
+          <option value="random" ${S.t.poolMethod === 'random' ? 'selected' : ''}>Random draw for each player</option>
+          <option value="same" ${S.t.poolMethod === 'same' ? 'selected' : ''}>Same pool for everyone</option>
+          <option value="copy" ${S.t.poolMethod === 'copy' ? 'selected' : ''}>Copy from Fall 2026 Tournament</option></select></label>
+      </div>
+      ${Number(S.t.poolSize) ? `<p class="note">You can change any player’s pool later on the <button type="button" class="btn link" data-goto="civs">Civ pools</button> page.</p>` : ''}`,
+    rules: () => `
+      <p class="note" style="margin:0">${S.rulesEdited ? 'You’ve edited these rules, so they no longer follow your settings. ' : 'Written from your settings, and kept up to date while you change them. Edit any line to take over.'}
+      ${S.rulesEdited ? '<button type="button" class="btn link" data-act="rules-reset">Rewrite from settings</button>' : ''}</p>
+      <ol class="rules">${rules().map(([l, t], i) => `<li><input class="in" id="rl-${i}" data-rl="${i}" value="${esc(l)}" aria-label="Rule heading"><input class="in" id="rt-${i}" data-rt="${i}" value="${esc(t)}" aria-label="Rule text">
+        <span class="tools"><button type="button" class="btn small" data-rule-up="${i}" aria-label="Move up" ${i ? '' : 'disabled'}>↑</button><button type="button" class="btn small" data-rule-del="${i}" aria-label="Remove">✕</button></span></li>`).join('')}</ol>
+      <div><button type="button" class="btn small" data-act="rule-add">+ Add a rule</button></div>`,
+    review: () => `
+      <div class="kpis">
+        <div class="kpi"><div class="v">${nPlayers()}</div><div class="l">players</div></div>
+        <div class="kpi"><div class="v">${poolGames()}</div><div class="l">pool play games</div></div>
+        <div class="kpi"><div class="v">${adv() ? bracketRounds().reduce((a, r) => a + r.matches.length, 0) : 0}</div><div class="l">playoff series (best of ${S.t.bo})</div></div>
+        <div class="kpi"><div class="v">${Number(S.t.poolSize) || 'Any'}</div><div class="l">civs per player</div></div>
+      </div>
+      <ol class="rules read">${rules().map(([l, t]) => `<li><b>${esc(l)}</b><span>${esc(t)}</span></li>`).join('')}</ol>
+      <div class="row"><label class="f" style="width:auto"><span>Status when created</span><select id="t-status"><option>Upcoming</option><option>Active</option></select></label></div>
+      <div class="row"><button type="button" class="btn primary" data-act="create">Create ${esc(S.t.name || 'tournament')}</button><span class="note" style="margin:0">Everyone sees it straight away.</span></div>`,
+  };
+  function bracketHtml() {
+    const rs = bracketRounds();
+    if (!rs.length) return S.t.template === 'rr' ? '<p class="note">No playoffs: the pool play leader wins.</p>' : '';
+    return `<div class="f"><span>Playoff bracket</span><div class="bracket">${rs.map((r) => `<div class="col"><span>${esc(r.name)}</span>${r.matches.map(([a, b]) => `<div class="m"><div>${esc(a)}</div><div>${esc(b)}</div></div>`).join('')}</div>`).join('')}</div></div>`;
+  }
+  const STEPS = [['basics', 'Basics'], ['players', 'Players'], ['format', 'Format & maps'], ['civs', 'Civ pools'], ['rules', 'Rules'], ['review', 'Review']];
+
+  function setupPage() {
+    const o = S.picks.setup;
+    if (o === 'A') {
+      const [k, label] = STEPS[S.step];
+      return `<div class="card stack">
+        <nav class="steps" aria-label="Steps">${STEPS.map(([, l], i) => `<button type="button" data-step="${i}" class="${i < S.step ? 'done' : ''}" ${i === S.step ? 'aria-current="step"' : ''}><span class="n">${i < S.step ? '✓' : i + 1}</span>${l}</button>`).join('')}</nav>
+        <h2>${label}</h2>${sec[k]()}
+        <div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding-top:12px">
+          <button type="button" class="btn" data-act="back" ${S.step ? '' : 'disabled'}>Back</button>
+          ${S.step < STEPS.length - 1 ? `<button type="button" class="btn primary" data-act="next">Next: ${STEPS[S.step + 1][1]}</button>` : ''}
+        </div></div>`;
+    }
+    if (o === 'B') {
+      return `<div class="split">
+        <div class="stack">${STEPS.slice(0, 5).map(([k, l]) => `<section class="card stack"><h2>${l}</h2>${sec[k]()}</section>`).join('')}</div>
+        <aside class="card stack sticky"><h2>${esc(S.t.name || 'New tournament')}</h2>
+          <p class="note" style="margin:0">${S.t.start ? 'Starts ' + fmtDate(S.t.start) : 'No start date yet'} · ${S.t.template === 'rr' ? 'Round robin only' : S.t.template === 'po' ? 'Playoffs only' : 'Round robin, then playoffs'}</p>
+          <div class="kpis"><div class="kpi"><div class="v">${nPlayers()}</div><div class="l">players</div></div><div class="kpi"><div class="v">${poolGames()}</div><div class="l">pool games</div></div></div>
+          ${adv() ? `<p class="note" style="margin:0">Playoffs: ${bracketRounds().map((r) => r.name).join(' → ')}, best of ${S.t.bo}</p>` : ''}
+          <p class="note" style="margin:0">Civs: ${Number(S.t.poolSize) ? S.t.poolSize + ' per player' : 'any civ'}</p>
+          ${nPlayers() < 2 ? '<p class="hint">Pick at least two players.</p>' : ''}
+          <button type="button" class="btn primary" data-act="create" ${nPlayers() < 2 ? 'disabled' : ''}>Create tournament</button>
+        </aside></div>`;
+    }
+    const tpls = [['rrpo', 'Round robin + playoffs', 'Everyone plays everyone, then the top players play a seeded bracket. What you ran this fall.'],
+      ['rr', 'Round robin only', 'Everyone plays everyone once. Most wins takes it.'],
+      ['po', 'Playoffs only', 'A seeded single-elimination bracket. Quick, for one evening.'],
+      ['copy', 'Copy Fall 2026', 'Same players, format, civ pool size and rules. Change the name and dates.']];
+    return `<div class="stack">
+      <div class="card stack"><h2>What kind of tournament?</h2><div class="tpl">${tpls.map(([v, n, d]) => `<button type="button" data-tpl="${v}" aria-pressed="${S.t.template === v || (v === 'copy' && S.copied)}"><strong>${n}</strong><small>${d}</small></button>`).join('')}</div></div>
+      <div class="card stack"><h2>The essentials</h2>${sec.basics()}<h3>Players</h3>${sec.players()}
+        <details class="sec"><summary>Format &amp; maps <span class="note">· ${S.t.template === 'rr' ? 'no playoffs' : `top ${adv()}, best of ${S.t.bo}`}, ${esc(S.t.decider)}</span></summary>${sec.format()}</details>
+        <details class="sec"><summary>Civ pools <span class="note">· ${Number(S.t.poolSize) ? S.t.poolSize + ' per player' : 'any civ'}</span></summary>${sec.civs()}</details>
+        <details class="sec"><summary>Rules <span class="note">· ${rules().length} rules, written for you</span></summary>${sec.rules()}</details>
+        <div class="row" style="border-top:1px solid var(--line);padding-top:12px"><button type="button" class="btn primary" data-act="create">Create tournament</button><span class="note" style="margin:0">${nPlayers()} players · ${poolGames()} pool games</span></div>
+      </div></div>`;
+  }
+
+  // ------------------------------------------------------------------ civ pools
+  const size = () => Number(S.t.poolSize) || 15;
+  const shown = () => CIVS.filter((c) => S.filter === 'All' || styleOf(c) === S.filter);
+  const countHtml = (n) => `<span class="count ${n === size() ? 'full' : n > size() ? 'over' : ''}">${n} / ${size()}</span>`;
+  const filters = () => `<div class="row">${STYLE_LIST.map((s) => `<button type="button" class="chip" data-filter="${s}" aria-pressed="${S.filter === s}">${s}${s === 'All' ? '' : ` <small style="color:var(--muted)">${CIVS.filter((c) => styleOf(c) === s).length}</small>`}</button>`).join('')}</div>`;
+  const head = () => `<div class="row" style="justify-content:space-between"><div><h2>Civ pools · Winter 2026</h2><p class="note">Each player gets ${size()} civs. Click a civ to add or remove it.</p></div>
+    <label class="f" style="width:auto"><span>Civs per player</span><select id="c-size" data-k="poolSize">${[5, 10, 15, 20, 25].map((n) => `<option value="${n}" ${size() === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>`;
+  function civsPage() {
+    const o = S.picks.civs;
+    if (o === 'A') {
+      const p = S.civPlayer, pool = S.pools[p];
+      return `<div class="card stack">${head()}
+        <div class="row">${PLAYERS.map((x) => `<button type="button" class="chip" data-civplayer="${esc(x.name)}" aria-pressed="${p === x.name}">${esc(x.name)} ${countHtml(S.pools[x.name].length)}</button>`).join('')}</div>
+        <div class="row" style="justify-content:space-between"><span><b>${esc(p)}</b> · ${countHtml(pool.length)}</span>
+          <span class="row"><button type="button" class="btn small" data-act="pool-random">Random fill</button><button type="button" class="btn small" data-act="pool-copy">Copy to everyone</button><button type="button" class="btn small" data-act="pool-clear">Clear</button></span></div>
+        ${filters()}
+        <div class="civgrid">${shown().map((c) => `<button type="button" class="civ" data-civ="${esc(c)}" aria-pressed="${pool.includes(c)}" ${!pool.includes(c) && pool.length >= size() ? 'disabled' : ''}>${esc(c)}<small>${STYLES[c]}</small></button>`).join('')}</div>
+      </div>`;
+    }
+    if (o === 'B') {
+      return `<div class="card stack">${head()}${filters()}
+        <div class="scroll tall"><table class="matrix"><thead><tr><th>Civ</th>${PLAYERS.map((x) => `<th>${esc(x.name)}<br>${countHtml(S.pools[x.name].length)}</th>`).join('')}<th>Players</th></tr></thead>
+        <tbody>${shown().map((c) => `<tr><td>${esc(c)} <small style="color:var(--muted)">${STYLES[c]}</small></td>${PLAYERS.map((x) => `<td><input type="checkbox" id="m-${esc(x.name)}-${esc(c)}" data-mx="${esc(x.name)}|${esc(c)}" ${S.pools[x.name].includes(c) ? 'checked' : ''} aria-label="${esc(c)} for ${esc(x.name)}"></td>`).join('')}<td>${PLAYERS.filter((x) => S.pools[x.name].includes(c)).length}</td></tr>`).join('')}</tbody></table></div>
+        <p class="note">The last column shows how many players share each civ, so you can keep pools balanced.</p></div>`;
+    }
+    return `<div class="stack"><div class="card stack">${head()}
+        <h3>Start from a preset</h3><div class="preset">
+          <button type="button" data-preset="random"><strong>Random draw</strong><small>${size()} different random civs for each player</small></button>
+          <button type="button" data-preset="balanced"><strong>Balanced random</strong><small>Random, but every player gets a mix of infantry, cavalry and archer civs</small></button>
+          <button type="button" data-preset="same"><strong>Same pool for everyone</strong><small>One shared list of ${size()} civs</small></button>
+          <button type="button" data-preset="copy"><strong>Copy Fall 2026</strong><small>Each player keeps last tournament’s pool</small></button>
+        </div></div>
+      <div class="card stack"><h3>Pools</h3><p class="note" style="margin:0">Click a civ to take it out. Use “+ Add” to pick from the full list.</p>
+        <div class="plist">${PLAYERS.map((x) => `<div class="p"><div><b>${esc(x.name)}</b><br>${countHtml(S.pools[x.name].length)}</div>
+          <div class="minis">${S.pools[x.name].slice().sort().map((c) => `<button type="button" class="mini" data-rm="${esc(x.name)}|${esc(c)}" title="Remove ${esc(c)}">${esc(c)}</button>`).join('')}
+          ${S.pools[x.name].length < size() ? `<select class="mini" id="add-${esc(x.name)}" data-add="${esc(x.name)}" aria-label="Add a civ for ${esc(x.name)}"><option value="">+ Add</option>${CIVS.filter((c) => !S.pools[x.name].includes(c)).map((c) => `<option>${esc(c)}</option>`).join('')}</select>` : ''}</div></div>`).join('')}</div></div></div>`;
+  }
+
+  // ------------------------------------------------------------------ manage
+  const tOf = () => TOURNEYS.find((t) => t.id === S.manageT);
+  function manageSection(k) {
+    const t = tOf();
+    if (k === 'overview') return `
+      <div class="kpis"><div class="kpi"><div class="v">${t.played} / ${t.total}</div><div class="l">pool games played</div></div><div class="kpi"><div class="v">${t.players}</div><div class="l">players</div></div><div class="kpi"><div class="v">${t.status === 'Active' ? '2' : '0'}</div><div class="l">games to approve</div></div></div>
+      <div class="bar" aria-hidden="true"><i style="width:${Math.round((t.played / t.total) * 100)}%"></i></div>
+      ${t.status === 'Active' ? `<h3>Needs you</h3><ul class="attn">
+        <li><span>Joe vs Christopher · Arabia · 34 min · Joe confirmed, Christopher hasn’t</span><span class="row"><button type="button" class="btn small primary" data-act="approve">Approve</button><button type="button" class="btn small" data-act="approve">Not a tournament game</button></span></li>
+        <li><span>Daniel vs Nathan · Arena · disputed (Nathan says it wasn’t a tournament game)</span><span class="row"><button type="button" class="btn small primary" data-act="approve">Approve</button><button type="button" class="btn small" data-act="approve">Reject</button></span></li></ul>` : '<p class="note">Nothing needs you. This tournament is finished.</p>'}
+      <div class="row"><button type="button" class="btn" data-act="status">${t.status === 'Active' ? 'Mark completed' : 'Reopen'}</button><button type="button" class="btn" data-act="noop">Fix a result</button><button type="button" class="btn" data-act="noop">Copy as a new tournament</button></div>`;
+    if (k === 'settings') return `<div class="grid2"><label class="f"><span>Name</span><input id="m-name" value="${esc(t.name)}"></label><label class="f"><span>Status</span><select id="m-status"><option ${t.status === 'Upcoming' ? 'selected' : ''}>Upcoming</option><option ${t.status === 'Active' ? 'selected' : ''}>Active</option><option ${t.status === 'Completed' ? 'selected' : ''}>Completed</option></select></label><label class="f"><span>Start date</span><input id="m-start" type="date" value="${t.start}"></label><label class="f"><span>Playoff series</span><select id="m-bo"><option>Best of 3</option><option>Best of 5</option></select></label></div><div><button type="button" class="btn primary" data-act="saved">Save changes</button></div>`;
+    if (k === 'players') return `<p class="hint">Games have been played, so adding a player adds their pool games to the end of the schedule. Removing one keeps their played games.</p><div class="row">${PLAYERS.map((p) => `<button type="button" class="chip" aria-pressed="true">${esc(p.name)}</button>`).join('')}<button type="button" class="btn small" data-act="noop">+ Add player</button></div>`;
+    if (k === 'schedule') return `<div class="scroll"><table><thead><tr><th>Game</th><th>Players</th><th>Status</th><th></th></tr></thead><tbody>${[['1', 'Daniel vs Christopher', 'Scheduled'], ['2', 'Nathan vs Ryan', 'Scheduled'], ['7', 'Joe vs Nathan', 'Final · Nathan won']].map(([g, p, s]) => `<tr><td>${g}</td><td>${p}</td><td>${/Final/.test(s) ? `<span class="pill ok">${s}</span>` : `<span class="pill">${s}</span>`}</td><td><button type="button" class="btn small" data-act="noop">${/Final/.test(s) ? 'Fix result' : 'Swap players'}</button></td></tr>`).join('')}</tbody></table></div>`;
+    if (k === 'civs') return `<p class="note" style="margin:0">15 civs per player.</p><div class="plist">${PLAYERS.slice(0, 3).map((x) => `<div class="p"><b>${esc(x.name)}</b><div class="minis">${S.pools[x.name].slice(0, 8).map((c) => `<span class="mini">${esc(c)}</span>`).join('')}<span class="note">+7 more</span></div></div>`).join('')}</div><div><button type="button" class="btn" data-goto="civs">Open the civ picker</button></div>`;
+    if (k === 'rules') return `<ol class="rules read">${makeRules().slice(0, 5).map(([l, x]) => `<li><b>${esc(l)}</b><span>${esc(x)}</span></li>`).join('')}</ol><div><button type="button" class="btn" data-act="noop">Edit rules</button></div>`;
+    if (k === 'organizers') return `<p class="note" style="margin:0">People who can run this tournament. Owners always can.</p><div class="row">${S.people.filter((p) => p.role === 'organizer' || p.role === 'owner').map((p) => `<span class="pill ${p.role === 'owner' ? 'acc' : ''}">${esc(p.name)} · ${p.role === 'owner' ? 'owner' : p.scope === 'all' ? 'all tournaments' : 'this tournament'}</span>`).join('')}</div><div><button type="button" class="btn" data-goto="people">Manage on the People page</button></div>`;
+    return '';
+  }
+  const MT = [['overview', 'Overview'], ['settings', 'Settings'], ['players', 'Players'], ['schedule', 'Schedule'], ['civs', 'Civ pools'], ['rules', 'Rules'], ['organizers', 'Organizers']];
+  function managePage() {
+    const t = tOf();
+    const statusPill = (s) => `<span class="pill ${s === 'Active' ? 'ok' : ''}">${s}</span>`;
+    if (S.picks.manage === 'A') {
+      return `<div class="card stack">
+        <div class="row" style="justify-content:space-between"><label class="f" style="width:auto;min-width:16rem"><span>Tournament</span><select id="m-pick" data-mpick="1">${TOURNEYS.map((x) => `<option value="${x.id}" ${x.id === t.id ? 'selected' : ''}>${esc(x.name)} (${x.status})</option>`).join('')}</select></label>
+        <button type="button" class="btn" data-goto="setup">+ New tournament</button></div>
+        <div class="row"><h2 style="font-family:var(--serif);font-weight:400;font-size:22px">${esc(t.name)}</h2>${statusPill(t.status)}<span class="note" style="margin:0">Started ${fmtDate(t.start)}</span></div>
+        <div class="itabs" role="tablist">${MT.map(([k, l]) => `<button type="button" role="tab" data-mtab="${k}" aria-selected="${S.manageTab === k}">${l}</button>`).join('')}</div>
+        <div class="stack">${manageSection(S.manageTab)}</div></div>`;
+    }
+    return `<div class="mlayout">
+      <div class="stack"><div class="tlist">${TOURNEYS.map((x) => `<button type="button" data-mt="${x.id}" aria-current="${x.id === t.id}"><b>${esc(x.name)}</b><small>${x.status} · ${x.played}/${x.total} games</small><span class="bar"><i style="width:${Math.round((x.played / x.total) * 100)}%"></i></span></button>`).join('')}</div>
+        <button type="button" class="btn" data-goto="setup">+ New tournament</button></div>
+      <div class="card stack"><div class="row"><h2 style="font-family:var(--serif);font-weight:400;font-size:22px">${esc(t.name)}</h2>${statusPill(t.status)}</div>
+        ${manageSection('overview')}
+        ${MT.slice(1).map(([k, l]) => `<div class="secrow"><h3>${l}</h3></div>${manageSection(k)}`).join('')}
+      </div></div>`;
+  }
+
+  // ------------------------------------------------------------------ people
+  const roleSelect = (p) => p.role === 'owner' ? '<span class="pill acc">Owner</span>' : `<select class="in" style="width:auto" id="role-${esc(p.name)}" data-role="${esc(p.name)}" aria-label="Role for ${esc(p.name)}">${['organizer', 'player', 'viewer'].map((r) => `<option value="${r}" ${p.role === r ? 'selected' : ''}>${ROLES[r][0]}</option>`).join('')}</select>`;
+  const scopeHtml = (p) => {
+    if (p.role === 'owner') return '<span class="note" style="margin:0">Everything</span>';
+    if (p.role !== 'organizer') return '<span class="note" style="margin:0">—</span>';
+    return `<span class="row"><button type="button" class="chip" data-scope="${esc(p.name)}|all" aria-pressed="${p.scope === 'all'}">All tournaments</button>${TOURNEYS.map((t) => `<button type="button" class="chip" data-scope="${esc(p.name)}|${t.id}" aria-pressed="${p.scope !== 'all' && p.scope.includes(t.id)}">${esc(t.name)}</button>`).join('')}</span>`;
+  };
+  const invites = () => `<div class="card stack"><div class="row" style="justify-content:space-between"><div><h2>Invite someone</h2><p class="note">Each link works once, for 14 days. They join with the role you pick.</p></div>
+      <span class="row"><select class="in" style="width:auto" id="inv-role" aria-label="Role for the invite"><option value="player">As a player</option><option value="viewer">As a viewer</option><option value="organizer">As an organizer</option></select><button type="button" class="btn primary" data-act="invite">Create invite link</button></span></div>
+      ${S.invites.length ? `<div class="scroll"><table><thead><tr><th>Waiting invites</th><th>Role</th><th>Made</th><th>Expires</th><th></th></tr></thead><tbody>${S.invites.map((i, n) => `<tr><td><code>…/?invite=${esc(i.code)}</code></td><td>${ROLES[i.role][0]}</td><td>${fmtDate(i.made)}</td><td>${fmtDate(i.expires)}</td><td><button type="button" class="btn small" data-act="copy-inv">Copy</button> <button type="button" class="btn small" data-uninvite="${n}">Cancel</button></td></tr>`).join('')}</tbody></table></div>` : ''}</div>`;
+  const legend = () => `<div class="legend">${Object.values(ROLES).map(([n, d]) => `<div><b>${n}</b>${d}</div>`).join('')}</div>`;
+  function peoplePage() {
+    const o = S.picks.people;
+    if (o === 'A') {
+      return `<div class="stack">${invites()}<div class="card stack"><h2>People who can open the site</h2>${legend()}
+        <div class="scroll"><table><thead><tr><th>Name</th><th>Discord</th><th>Role</th><th>Runs</th><th>Joined</th><th></th></tr></thead><tbody>
+        ${S.people.map((p) => `<tr><td><b>${esc(p.name)}</b></td><td>${esc(p.discord)}</td><td>${roleSelect(p)}</td><td>${scopeHtml(p)}</td><td>${fmtDate(p.joined)}</td><td>${p.role === 'owner' ? '' : `<button type="button" class="btn small" data-remove="${esc(p.name)}">Remove</button>`}</td></tr>`).join('')}
+        </tbody></table></div></div></div>`;
+    }
+    if (o === 'B') {
+      const sel = S.people.find((p) => p.name === S.person) || S.people[0];
+      return `<div class="stack">${invites()}<div class="split">
+        <div class="card stack"><h2>People</h2><div class="pcards">${S.people.map((p) => `<button type="button" class="pcard" data-person="${esc(p.name)}" aria-pressed="${p.name === sel.name}"><b>${esc(p.name)}</b><small>${esc(p.discord)} · joined ${fmtDate(p.joined)}</small><span><span class="pill ${p.role === 'owner' ? 'acc' : p.role === 'organizer' ? 'ok' : ''}">${ROLES[p.role][0]}</span>${p.role === 'organizer' ? ` <small>${p.scope === 'all' ? 'all tournaments' : p.scope.length + ' tournament' + (p.scope.length === 1 ? '' : 's')}</small>` : ''}</span></button>`).join('')}</div></div>
+        <aside class="card stack sticky"><h2>${esc(sel.name)}</h2><p class="note" style="margin:0">Discord: ${esc(sel.discord)} · plays as ${esc(sel.name)}</p>
+          ${sel.role === 'owner' ? '<p class="hint">Owners can do everything and can’t be changed here.</p>' : `<div class="roles">${['organizer', 'player', 'viewer'].map((r) => `<label><input type="radio" name="role" id="r-${r}" data-role="${esc(sel.name)}" value="${r}" ${sel.role === r ? 'checked' : ''}><span>${ROLES[r][0]}</span><small>${ROLES[r][1]}</small></label>`).join('')}</div>
+          ${sel.role === 'organizer' ? `<div class="f"><span>Runs</span>${scopeHtml(sel)}</div>` : ''}
+          <div class="row" style="justify-content:space-between"><button type="button" class="btn" data-remove="${esc(sel.name)}">Remove from the site</button></div>`}
+        </aside></div></div>`;
+    }
+    const groups = [['owner', 'Owners'], ['organizer', 'Organizers'], ['player', 'Players'], ['viewer', 'Viewers']];
+    return `<div class="stack">${invites()}<div class="cols">${groups.map(([r, l]) => `<div class="card stack col"><h3>${l} <span class="note" style="margin:0">${S.people.filter((p) => p.role === r).length}</span></h3><p class="note" style="margin:0">${ROLES[r][1]}</p>
+      ${S.people.filter((p) => p.role === r).map((p) => `<div class="person"><span><b>${esc(p.name)}</b><small>${esc(p.discord)}${p.role === 'organizer' ? ' · ' + (p.scope === 'all' ? 'all tournaments' : p.scope.map((id) => TOURNEYS.find((t) => t.id === id).name).join(', ')) : ''}</small></span>${r === 'owner' ? '' : `<select class="in" style="width:auto" id="g-${esc(p.name)}" data-role="${esc(p.name)}" aria-label="Move ${esc(p.name)}">${groups.slice(1).map(([v, gl]) => `<option value="${v}" ${v === r ? 'selected' : ''}>${gl.replace(/s$/, '')}</option>`).join('')}</select>`}</div>`).join('') || '<p class="note">Nobody yet.</p>'}
+      </div>`).join('')}</div></div>`;
+  }
+
+  // ------------------------------------------------------------------ drawing
+  function draw() {
+    const pg = PAGES[S.page];
+    $('pages').innerHTML = Object.entries(PAGES).map(([k, v]) => `<button type="button" data-page="${k}" ${S.page === k ? 'aria-current="page"' : ''}>${v.label}</button>`).join('');
+    $('opt-seg').innerHTML = Object.keys(pg.opts).map((k) => `<button type="button" data-opt="${k}" aria-pressed="${S.picks[S.page] === k}" title="${esc(pg.opts[k])}">${k}</button>`).join('');
+    $('opt-name').textContent = pg.opts[S.picks[S.page]];
+    const y = window.scrollY;
+    const active = document.activeElement && document.activeElement.id;
+    $('page').innerHTML = { setup: setupPage, civs: civsPage, manage: managePage, people: peoplePage }[S.page]();
+    if (active && $(active)) $(active).focus({ preventScroll: true });
+    window.scrollTo(0, y);
+    drawPanel();
+  }
+  function drawPanel() {
+    $('panel-pages').innerHTML = Object.entries(PAGES).map(([k, v]) => `<div class="pg"><div class="row" style="justify-content:space-between"><b>${v.label}</b><span class="pill">${S.picks[k]} · ${esc(v.opts[S.picks[k]])}</span></div>
+      <textarea class="in" rows="2" id="note-${k}" data-note="${k}" placeholder="Notes for this page">${esc(S.notes[k])}</textarea></div>`).join('');
+    $('note-general').value = S.notes.general;
+  }
+
+  // ------------------------------------------------------------------ events
+  const set = (k, v) => { S.t[k] = ['bo', 'advance', 'poolSize'].includes(k) ? Number(v) : v; if (k === 'template' && v !== 'copy') S.copied = false; };
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const d = b.dataset;
+    if (d.page) { S.page = d.page; window.scrollTo(0, 0); }
+    else if (d.opt) { S.picks[S.page] = d.opt; persist(); }
+    else if (d.goto) { S.page = d.goto; window.scrollTo(0, 0); }
+    else if (d.step) S.step = Number(d.step);
+    else if (d.player) { const i = S.t.players.indexOf(d.player); if (i >= 0) S.t.players.splice(i, 1); else S.t.players.push(d.player); }
+    else if (d.org) { const i = S.t.organizers.indexOf(d.org); if (i >= 0) S.t.organizers.splice(i, 1); else S.t.organizers.push(d.org); }
+    else if (d.tpl) { if (d.tpl === 'copy') { Object.assign(S.t, { template: 'rrpo', bo: 3, advance: 5, decider: 'Arabia', poolSize: 15, poolMethod: 'copy', players: PLAYERS.map((p) => p.name) }); S.copied = true; } else { S.t.template = d.tpl; S.copied = false; } }
+    else if (d.ruleUp) { const r = rules(), i = Number(d.ruleUp); [r[i - 1], r[i]] = [r[i], r[i - 1]]; S.rulesEdited = true; }
+    else if (d.ruleDel) { rules().splice(Number(d.ruleDel), 1); S.rulesEdited = true; }
+    else if (d.filter) S.filter = d.filter;
+    else if (d.civplayer) S.civPlayer = d.civplayer;
+    else if (d.civ) { const pool = S.pools[S.civPlayer], i = pool.indexOf(d.civ); if (i >= 0) pool.splice(i, 1); else if (pool.length < size()) pool.push(d.civ); }
+    else if (d.rm) { const [p, c] = d.rm.split('|'); S.pools[p] = S.pools[p].filter((x) => x !== c); }
+    else if (d.preset) {
+      if (d.preset === 'same') { const one = shuffle(CIVS).slice(0, size()); PLAYERS.forEach((p) => { S.pools[p.name] = one.slice(); }); }
+      else if (d.preset === 'balanced') PLAYERS.forEach((p) => { const pick = []; ['Infantry', 'Cavalry', 'Archer'].forEach((st) => pick.push(...shuffle(CIVS.filter((c) => styleOf(c) === st)).slice(0, Math.floor(size() / 4)))); S.pools[p.name] = pick.concat(shuffle(CIVS.filter((c) => !pick.includes(c))).slice(0, size() - pick.length)); });
+      else PLAYERS.forEach((p) => { S.pools[p.name] = shuffle(CIVS).slice(0, size()); });
+      toast(d.preset === 'copy' ? 'Copied last tournament’s pools' : 'Pools filled');
+    }
+    else if (d.mtab) S.manageTab = d.mtab;
+    else if (d.mt) S.manageT = d.mt;
+    else if (d.person) S.person = d.person;
+    else if (d.scope) {
+      const [n, id] = d.scope.split('|'); const p = S.people.find((x) => x.name === n);
+      if (id === 'all') p.scope = p.scope === 'all' ? [] : 'all';
+      else { const cur = p.scope === 'all' ? [] : p.scope; p.scope = cur.includes(id) ? cur.filter((x) => x !== id) : cur.concat(id); }
+    }
+    else if (d.remove) { if (b.dataset.sure) { S.people = S.people.filter((p) => p.name !== d.remove); toast(`${d.remove} removed`); } else { b.textContent = `Remove ${d.remove}? Click again`; b.dataset.sure = '1'; return; } }
+    else if (d.uninvite) S.invites.splice(Number(d.uninvite), 1);
+    else if (d.act) {
+      const a = d.act;
+      if (a === 'next') S.step = Math.min(STEPS.length - 1, S.step + 1);
+      else if (a === 'back') S.step = Math.max(0, S.step - 1);
+      else if (a === 'all-players') S.t.players = PLAYERS.map((p) => p.name);
+      else if (a === 'no-players') S.t.players = [];
+      else if (a === 'add-player') { toast('Opens a small form: name, Steam name, AoE2 profile ID'); return; }
+      else if (a === 'rules-reset') { S.rulesEdited = false; S.rules = null; }
+      else if (a === 'rule-add') { rules().push(['New rule', '']); S.rulesEdited = true; }
+      else if (a === 'create') { toast(`${S.t.name || 'Tournament'} created (prototype)`); return; }
+      else if (a === 'pool-random') S.pools[S.civPlayer] = shuffle(CIVS).slice(0, size());
+      else if (a === 'pool-copy') { PLAYERS.forEach((p) => { S.pools[p.name] = S.pools[S.civPlayer].slice(); }); toast(`Everyone now has ${S.civPlayer}’s pool`); }
+      else if (a === 'pool-clear') S.pools[S.civPlayer] = [];
+      else if (a === 'invite') { const role = $('inv-role').value; S.invites.unshift({ code: Math.random().toString(36).slice(2, 6) + '…', made: '2026-10-26', expires: '2026-11-09', role }); toast('Invite link made'); }
+      else if (a === 'copy-inv') { toast('Link copied (prototype)'); return; }
+      else if (a === 'approve') { toast('Saved (prototype)'); return; }
+      else if (a === 'status') { const t = tOf(); t.status = t.status === 'Active' ? 'Completed' : 'Active'; }
+      else if (a === 'saved') { toast('Saved (prototype)'); return; }
+      else if (a === 'noop') { toast('Not built in the prototype'); return; }
+    } else return;
+    draw();
+  });
+  document.addEventListener('change', (e) => {
+    const t = e.target, d = t.dataset;
+    if (d.k) { set(d.k, t.value); if (!S.rulesEdited) S.rules = null; }
+    else if (d.mx) { const [p, c] = d.mx.split('|'); const pool = S.pools[p]; if (t.checked) pool.push(c); else S.pools[p] = pool.filter((x) => x !== c); }
+    else if (d.add) { if (t.value) S.pools[d.add].push(t.value); }
+    else if (d.mpick) S.manageT = t.value;
+    else if (d.role) { const p = S.people.find((x) => x.name === d.role); p.role = t.value; if (t.value === 'organizer' && !p.scope.length && p.scope !== 'all') p.scope = []; }
+    else return;
+    draw();
+  });
+  document.addEventListener('input', (e) => {
+    const t = e.target, d = t.dataset;
+    if (d.k === 'name') { S.t.name = t.value; return; }
+    if (d.rl != null) { rules()[Number(d.rl)][0] = t.value; S.rulesEdited = true; return; }
+    if (d.rt != null) { rules()[Number(d.rt)][1] = t.value; S.rulesEdited = true; return; }
+    if (d.note) { S.notes[d.note] = t.value; persist(); return; }
+    if (t.id === 'note-general') { S.notes.general = t.value; persist(); }
+  });
+
+  // ------------------------------------------------------------------ choices panel
+  $('choices-btn').addEventListener('click', () => { $('panel').hidden = !$('panel').hidden; });
+  $('panel-close').addEventListener('click', () => { $('panel').hidden = true; });
+  $('gen').addEventListener('click', () => {
+    const lines = ['Build the AoE2 Tournaments Admin tab (organizers only) with these layouts, from the prototype at mockups/admin-prototype.html:'];
+    Object.entries(PAGES).forEach(([k, v]) => {
+      lines.push(`- ${v.label}: option ${S.picks[k]}, “${v.opts[S.picks[k]]}”.${S.notes[k].trim() ? ` Notes: ${S.notes[k].trim()}` : ''}`);
+    });
+    lines.push('Roles: Owner, Organizer (all tournaments or chosen ones), Player, Viewer. Civ pools: organizer picks, with presets. Rules: written from the settings, then editable.');
+    if (S.notes.general.trim()) lines.push(`Also: ${S.notes.general.trim()}`);
+    const out = $('prompt-out');
+    out.value = lines.join('\n');
+    out.hidden = false; $('copy').hidden = false;
+    out.select();
+  });
+  $('copy').addEventListener('click', async () => {
+    const out = $('prompt-out');
+    try { await navigator.clipboard.writeText(out.value); toast('Prompt copied'); } catch (e) { out.select(); toast('Select the text and copy it'); }
+  });
+
+  draw();
+})();
+</script>
