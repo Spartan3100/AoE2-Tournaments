@@ -156,6 +156,23 @@ create policy "change answer" on public.confirmations for update to authenticate
   )
 );
 
+-- Organizer changes made on the site (new or edited tournaments and players). Everyone invited sees them
+-- straight away; the update job saves them into config/ on GitHub and then clears them (site/js/admin-logic.js).
+create table if not exists public.admin_changes (
+  id bigint generated always as identity primary key,
+  kind text not null check (kind in ('tournament', 'player')),
+  payload jsonb not null check (jsonb_typeof(payload) = 'object' and length(payload::text) < 20000),
+  created_by uuid default auth.uid() references auth.users (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table public.admin_changes enable row level security;
+drop policy if exists "read changes" on public.admin_changes;
+create policy "read changes" on public.admin_changes for select to authenticated using (public.is_member());
+drop policy if exists "organizers add changes" on public.admin_changes;
+create policy "organizers add changes" on public.admin_changes for insert to authenticated with check (public.is_admin() and created_by = auth.uid());
+drop policy if exists "organizers cancel changes" on public.admin_changes;
+create policy "organizers cancel changes" on public.admin_changes for delete to authenticated using (public.is_admin());
+
 -- Last step: make yourself an organizer. Replace the address with the email on the account you'll sign in with
 -- (for Discord, your Discord account's email), then run just this line.
 -- insert into public.admins (email) values ('you@example.com') on conflict do nothing;

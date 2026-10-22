@@ -68,9 +68,10 @@
     const raw = Uint8Array.from(atob(key), (c) => c.charCodeAt(0));
     window.TT_setKey(await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']));
     await refreshMe();
-    await loadVotes();
-    setInterval(() => { if (document.visibilityState === 'visible') loadVotes(); }, 20000);
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadVotes(); });
+    await Promise.all([loadVotes(), loadChanges()]);
+    const poll = () => { if (document.visibilityState === 'visible') { loadVotes(); loadChanges(); } };
+    setInterval(poll, 20000);
+    document.addEventListener('visibilitychange', poll);
     const g = el('tt-gate');
     if (g) g.remove();
     document.documentElement.classList.remove('tt-locked');
@@ -145,6 +146,24 @@
     st.rows = data || [];
     if (window.dash && dash._setData) dash._setData('votes', st.rows);
     emit();
+  }
+
+  // organizer changes to tournaments and players, not yet saved into config/ by the update job (site/js/admin.js)
+  async function loadChanges() {
+    const { data, error } = await st.client.from('admin_changes').select('*').order('id');
+    if (error) { st.changesError = error.message; console.error(error); return; }
+    st.changesError = '';
+    if (window.dash && dash._setData) dash._setData('admin_changes', data || []);
+  }
+  async function saveChange(kind, payload) {
+    const { error } = await st.client.from('admin_changes').insert({ kind, payload, created_by: st.session.user.id });
+    if (error) throw error;
+    await loadChanges();
+  }
+  async function cancelChange(id) {
+    const { error } = await st.client.from('admin_changes').delete().eq('id', id);
+    if (error) throw error;
+    await loadChanges();
   }
 
   async function claim(player) {
@@ -248,6 +267,7 @@
   };
   window.claude = { use: async (name) => { await ready; if (!st.member) return null; return name === 'db' ? db : name === 'user' ? user : null; } };
   window.TT_BACKEND = st;
+  window.TT_ORG = { save: saveChange, cancel: cancelChange };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

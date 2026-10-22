@@ -11,13 +11,14 @@
   if (!window.TT_KEY) window.TT_KEY = new Promise((resolve) => { window.TT_setKey = resolve; });
   // Where each dataset comes from. config/ is edited by the organizers; data/ is written by the update job.
   const FILES = {
-    players: 'config/players.json', tournaments: 'config/tournaments.json', roster: 'config/roster.json',
+    players_file: 'config/players.json', tournaments_file: 'config/tournaments.json', roster_file: 'config/roster.json',
     rules: 'config/rules.json', civ_pool: 'config/civ_pool.json', civ_styles: 'config/civ_styles.json',
-    matches_base: 'config/matches.json', helper_app: 'config/app.json',
+    matches_file: 'config/matches.json', helper_app: 'config/app.json',
     history_file: 'data/history.json', replay_analysis: 'data/replay_analysis.json', replay_games: 'data/replay_games.json',
     data_check: 'data/data_check.json', meta: 'data/meta.json',
   };
-  const store = { votes: { status: 'ok', data: [] } }; // id -> {status, data, error}; votes are filled in by backend.js
+  // id -> {status, data, error}; votes and admin_changes are filled in by backend.js
+  const store = { votes: { status: 'ok', data: [] }, admin_changes: { status: 'ok', data: [] } };
   const calcs = {};
   const subs = [];
   let version = 0;
@@ -59,6 +60,16 @@
 
   // datasets that are put together here rather than read straight from a file
   const DERIVED = {
+    // tournament setup: the config files plus organizer changes made on the site since the last update
+    // (site/js/admin-logic.js; the update job saves them into config/ every 30 minutes)
+    config: {
+      inputs: ['players_file', 'tournaments_file', 'roster_file', 'matches_file', 'admin_changes'],
+      fn: (players, tournaments, roster, matches, changes) => TT_admin.apply({ players, tournaments, roster, matches }, changes),
+    },
+    players: { inputs: ['config'], fn: (c) => c.players },
+    tournaments: { inputs: ['config'], fn: (c) => c.tournaments },
+    roster: { inputs: ['config'], fn: (c) => c.roster },
+    matches_base: { inputs: ['config'], fn: (c) => c.matches },
     // all-time history: the file (updated every 30 minutes) plus any newer games fetched live in this browser
     history: { inputs: ['history_file'], fn: (h) => Live.merge(h) },
     // tournament games: the schedule (config/matches.json, where the update job saves confirmed games every
@@ -170,8 +181,9 @@
       return add.length ? add.concat(h) : h;
     },
     async poll() {
-      const pl = store.players && store.players.status === 'ok' ? store.players.data : null;
-      if (!pl) { load('players'); setTimeout(() => this.poll(), 1500); return; }
+      const pv = value('players');
+      const pl = pv.status === 'ok' ? pv.data : null;
+      if (!pl) { setTimeout(() => this.poll(), 1500); return; }
       const roster = new Map(pl.filter((p) => p.profile_id).map((p) => [String(p.profile_id), p.player]));
       const got = [];
       let err = '';

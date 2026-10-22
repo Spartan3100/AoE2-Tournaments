@@ -4,3 +4,4 @@ data_out/
 _site/
 __pycache__/
 *.pyc
+_admin_applied.json
