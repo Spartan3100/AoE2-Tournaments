@@ -1,0 +1,377 @@
+[
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Burgundians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Byzantines"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Franks"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Georgians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Goths"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Huns"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Japanese"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Lithuanians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Magyars"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Malay"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Persians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Poles"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Spanish"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Tatars"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Christopher",
+  "civ": "Varangians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Armenians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Bohemians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Dravidians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Ethiopians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Franks"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Georgians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Hindustanis"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Khitans"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Khmer"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Lithuanians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Mongols"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Romans"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Shu"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Teutons"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Daniel",
+  "civ": "Vietnamese"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Aztecs"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Bohemians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Burgundians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Celts"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Cumans"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Franks"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Goths"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Malay"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Mongols"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Persians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Sicilians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Spanish"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Turks"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Vietnamese"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Joe",
+  "civ": "Vikings"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Berbers"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Britons"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Burgundians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Celts"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Ethiopians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Franks"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Huns"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Khmer"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Magyars"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Mongols"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Persians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Romans"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Spanish"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Teutons"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Nathan",
+  "civ": "Vietnamese"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Britons"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Byzantines"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Ethiopians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Franks"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Hindustanis"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Huns"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Japanese"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Khmer"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Magyars"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Malay"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Persians"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Poles"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Romans"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Turks"
+ },
+ {
+  "tournament_id": "t1",
+  "player": "Ryan",
+  "civ": "Vietnamese"
+ }
+]

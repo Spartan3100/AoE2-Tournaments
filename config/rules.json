@@ -1,0 +1,56 @@
+[
+ {
+  "tournament_id": "t1",
+  "order": 1,
+  "label": "Pool play",
+  "text": "Round robin. Everyone plays every other player once, one game each."
+ },
+ {
+  "tournament_id": "t1",
+  "order": 2,
+  "label": "Pool standings",
+  "text": "Wins, then fewest losses, then head-to-head result."
+ },
+ {
+  "tournament_id": "t1",
+  "order": 3,
+  "label": "Playoffs",
+  "text": "All five players advance, seeded by pool play standings. Every series is best of 3."
+ },
+ {
+  "tournament_id": "t1",
+  "order": 4,
+  "label": "Play-in",
+  "text": "Seed 4 vs seed 5."
+ },
+ {
+  "tournament_id": "t1",
+  "order": 5,
+  "label": "Semifinals",
+  "text": "Seed 1 vs the play-in winner, and seed 2 vs seed 3."
+ },
+ {
+  "tournament_id": "t1",
+  "order": 6,
+  "label": "Final",
+  "text": "The two semifinal winners."
+ },
+ {
+  "tournament_id": "t1",
+  "order": 7,
+  "label": "Game 1",
+  "text": "The higher seed picks the map."
+ },
+ {
+  "tournament_id": "t1",
+  "order": 8,
+  "label": "Game 2",
+  "text": "The lower seed picks the map."
+ },
+ {
+  "tournament_id": "t1",
+  "order": 9,
+  "label": "Game 3 (if needed)",
+  "text": "Arabia."
+ }
+]
