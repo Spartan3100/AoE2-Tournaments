@@ -73,7 +73,7 @@ jobs:
       - name: Add new games, read replays, check accuracy
         run: python pipeline/update.py --max-replays 60
 
-      # tournaments and players added or edited by organizers on the site (Supabase table admin_changes)
+      # tournaments, players, rules and civ pools changed by organizers on the site (Supabase table admin_changes)
       - name: Save organizer changes
         run: node pipeline/apply_admin_changes.js
 
@@ -84,7 +84,7 @@ jobs:
         run: |
           git config user.name "aoe2-site-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          files="config/matches.json config/tournaments.json config/roster.json config/players.json"
+          files="config/matches.json config/tournaments.json config/roster.json config/players.json config/rules.json config/civ_pool.json"
           if ! git diff --quiet -- $files; then
             git add $files
             git commit -m "Organizer changes and confirmed tournament games"

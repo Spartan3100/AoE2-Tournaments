@@ -6,7 +6,8 @@
 // The page was written for claude.ai's `window.claude` runtime; this file also provides that small surface
 // (db + user) backed by Supabase, so render.js didn't need to change.
 (() => {
-  const st = { client: null, session: null, admin: false, member: false, claim: '', configured: false, rows: [], msg: '', showForm: false, providers: [], email: false };
+  // role: 'owner' | 'organizer' | 'player' | 'viewer'; scope: an organizer's tournament_ids, null = all of them
+  const st = { client: null, session: null, admin: false, role: '', scope: null, member: false, claim: '', configured: false, rows: [], msg: '', showForm: false, providers: [], email: false };
   const listeners = [];
   const emit = () => listeners.forEach((f) => { try { f(); } catch (e) { console.error(e); } });
   const el = (id) => document.getElementById(id);
@@ -76,7 +77,6 @@
     if (g) g.remove();
     document.documentElement.classList.remove('tt-locked');
     window.dispatchEvent(new Event('resize'));
-    renderMembers();
   }
 
   async function fetchKey() {
@@ -128,17 +128,22 @@
   }
 
   async function refreshMe() {
-    st.admin = false; st.claim = '';
+    st.admin = false; st.role = ''; st.scope = null; st.claim = '';
     if (st.session) {
       try {
         const { data } = await st.client.from('players_claim').select('player').eq('user_id', st.session.user.id).maybeSingle();
         st.claim = data ? data.player : '';
-        const r = await st.client.rpc('is_admin');
-        st.admin = !!r.data;
+        const r = await st.client.rpc('my_access');
+        if (!r.error) { st.role = (r.data && r.data.role) || ''; st.scope = (r.data && r.data.scope) || null; }
+        else { const a = await st.client.rpc('is_admin'); st.role = a.data ? 'owner' : 'player'; } // schema.sql not re-run yet
+        st.admin = st.role === 'owner';
       } catch (e) { console.error(e); }
     }
     renderAuth();
   }
+  const isOrganizer = () => st.role === 'owner' || st.role === 'organizer';
+  const canRunAll = () => st.role === 'owner' || (st.role === 'organizer' && st.scope == null);
+  const canRun = (tid) => canRunAll() || (st.role === 'organizer' && (st.scope || []).includes(tid));
 
   async function loadVotes() {
     const { data, error } = await st.client.from('confirmations').select('*');
@@ -167,6 +172,7 @@
   }
 
   async function claim(player) {
+    if (st.role === 'viewer') { st.claim = ''; return; } // viewers follow a player on this device only
     const uid = st.session.user.id;
     const q = player
       ? st.client.from('players_claim').upsert({ user_id: uid, player }, { onConflict: 'user_id' })
@@ -177,7 +183,7 @@
       renderAuth();
       throw error;
     }
-    st.claim = player; st.msg = ''; renderAuth(); renderMembers();
+    st.claim = player; st.msg = ''; renderAuth();
   }
 
   async function vote(d) {
@@ -192,53 +198,11 @@
     const box = el('auth-box');
     if (!box) return;
     box.hidden = false;
-    box.replaceChildren(mk('span', 'tt-label', `Signed in${st.claim ? ` as ${st.claim}` : ''}${st.admin ? ' · organizer' : ''}`),
+    box.replaceChildren(mk('span', 'tt-label', `Signed in${st.claim ? ` as ${st.claim}` : ''}${st.role && st.role !== 'player' ? ` · ${st.role}` : ''}`),
       button('Sign out', async () => { await st.client.auth.signOut(); location.reload(); }));
-    if (!st.claim) box.append(mk('span', 'tt-label', '· choose yourself under “I’m”'));
+    if (!st.claim && st.role !== 'viewer') box.append(mk('span', 'tt-label', '· choose yourself under “I’m”'));
     if (st.msg) box.append(mk('span', 'tt-label', st.msg));
   }
-
-  // ---------------------------------------------------------------- organizers: invites and members
-  async function renderMembers() {
-    const card = el('members-card');
-    if (!card) return;
-    card.hidden = !st.admin;
-    if (!st.admin) return;
-    const t = el('members-table');
-    const { data, error } = await st.client.rpc('members_list');
-    if (error) { el('invite-out').textContent = `Couldn’t load the list: ${error.message}`; return; }
-    const head = mk('tr');
-    ['Player', 'Signed in as', 'Joined', ''].forEach((h) => head.append(mk('th', '', h)));
-    t.tHead.replaceChildren(head);
-    const rows = (data || []).map((m) => {
-      const tr = mk('tr');
-      tr.append(mk('td', '', m.player || 'Not chosen yet'), mk('td', '', m.email || ''), mk('td', '', new Date(m.added_at).toLocaleDateString()));
-      const td = mk('td');
-      td.append(button('Remove', async () => {
-        if (!confirm(`Remove ${m.player || m.email || 'this person'}? They won't be able to open the site any more.`)) return;
-        const r = await st.client.rpc('remove_member', { p_user: m.user_id });
-        el('invite-out').textContent = r.error ? `Couldn’t remove: ${r.error.message}` : 'Removed.';
-        renderMembers();
-      }));
-      tr.append(td);
-      return tr;
-    });
-    if (!rows.length) { const tr = mk('tr'); const td = mk('td', 'tt-empty', 'Nobody has joined yet. Create an invite link and send it to a friend.'); td.colSpan = 4; tr.append(td); rows.push(tr); }
-    t.tBodies[0].replaceChildren(...rows);
-  }
-  document.addEventListener('DOMContentLoaded', () => {
-    const b = el('invite-btn');
-    if (!b) return;
-    b.addEventListener('click', async () => {
-      const out = el('invite-out');
-      const { data, error } = await st.client.rpc('create_invite');
-      if (error) { out.textContent = `Couldn’t create a link: ${error.message}`; return; }
-      const link = `${home()}?invite=${data}`;
-      const code = mk('code', '', link); code.style.userSelect = 'all';
-      out.replaceChildren('Send this link to one person: ', code, ' ');
-      out.append(button('Copy', async () => { try { await navigator.clipboard.writeText(link); out.lastChild.textContent = 'Copied'; } catch (e) { /* select it by hand */ } }));
-    });
-  });
 
   // ---------------------------------------------------------------- the window.claude surface render.js uses
   const none = { get: async () => ({ exists: false, data: () => undefined }), set: async () => { throw new Error('not available'); }, update: async () => { throw new Error('not available'); }, acquire: async () => ({ acquired: false }) };
@@ -260,14 +224,26 @@
   };
   const user = {
     id: async () => (st.session ? st.session.user.id : null),
-    isOwner: async () => st.admin,
-    canEdit: async () => st.admin,
+    isOwner: async () => isOrganizer(),
+    canEdit: async () => isOrganizer(),
     can: async () => !!st.session && st.member,
-    me: async () => ({ id: st.session ? st.session.user.id : null, name: st.claim || '', isOwner: st.admin, canEdit: st.admin }),
+    me: async () => ({ id: st.session ? st.session.user.id : null, name: st.claim || '', isOwner: isOrganizer(), canEdit: isOrganizer() }),
   };
   window.claude = { use: async (name) => { await ready; if (!st.member) return null; return name === 'db' ? db : name === 'user' ? user : null; } };
   window.TT_BACKEND = st;
-  window.TT_ORG = { save: saveChange, cancel: cancelChange };
+  // the Admin tab (site/js/admin.js); the database rules (supabase/schema.sql) check every one of these again
+  const rpc = async (name, args) => { const { data, error } = await st.client.rpc(name, args); if (error) throw error; return data; };
+  window.TT_ORG = {
+    save: saveChange, cancel: cancelChange, isOrganizer, canRun, canRunAll,
+    people: () => rpc('members_list'),
+    setRole: (user, role, scope) => rpc('set_member_role', { p_user: user, p_role: role, p_scope: scope }),
+    remove: (user) => rpc('remove_member', { p_user: user }),
+    invite: (role) => rpc('create_invite', { p_role: role }),
+    invites: () => rpc('invites_list'),
+    cancelInvite: (code) => rpc('cancel_invite', { p_code: code }),
+    link: (code) => `${home()}?invite=${code}`,
+    vote,
+  };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

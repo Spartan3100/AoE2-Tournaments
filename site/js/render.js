@@ -823,7 +823,8 @@
           actions.append(btn(c[side] === 'yes' ? '✓ You confirmed' : 'Yes, it counts', () => vote(s, side, 'yes'), c[side] === 'yes' ? '' : 'primary'),
             btn(c[side] === 'no' ? '✕ You said no' : 'Not a tournament game', () => vote(s, side, 'no')));
         }
-        if (ME.owner && can && c.status !== 'confirmed' && c.status !== 'approved') {
+        const org = window.TT_ORG ? TT_ORG.canRun(s.tournament_id) : ME.owner;
+        if (org && can && c.status !== 'confirmed' && c.status !== 'approved') {
           actions.append(btn('Approve as organizer', () => vote(s, 'org', 'yes'), side ? '' : 'primary'), btn('Reject', () => vote(s, 'org', 'no')));
         }
         actions.append(extLinks(s.match_id));

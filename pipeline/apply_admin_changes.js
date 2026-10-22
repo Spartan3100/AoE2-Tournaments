@@ -1,4 +1,4 @@
-// Saves organizer changes made on the site (new or edited tournaments and players) into config/*.json.
+// Saves organizer changes made on the site (tournaments, players, rules, civ pools) into config/*.json.
 //   node pipeline/apply_admin_changes.js          read the Supabase table admin_changes and write config/
 //   node pipeline/apply_admin_changes.js --clear  delete the changes the first call saved (run once they are
 //                                                 committed and published, so the site never shows a gap)
@@ -9,7 +9,10 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const DONE = path.join(ROOT, '_admin_applied.json');
-const FILES = { players: 'config/players.json', tournaments: 'config/tournaments.json', roster: 'config/roster.json', matches: 'config/matches.json' };
+const FILES = {
+  players: 'config/players.json', tournaments: 'config/tournaments.json', roster: 'config/roster.json', matches: 'config/matches.json',
+  rules: 'config/rules.json', civ_pool: 'config/civ_pool.json',
+};
 const read = (p) => JSON.parse(fs.readFileSync(path.join(ROOT, p), 'utf8'));
 require(path.join(ROOT, 'site/js/admin-logic.js'));
 

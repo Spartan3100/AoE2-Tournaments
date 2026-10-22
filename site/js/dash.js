@@ -12,7 +12,7 @@
   // Where each dataset comes from. config/ is edited by the organizers; data/ is written by the update job.
   const FILES = {
     players_file: 'config/players.json', tournaments_file: 'config/tournaments.json', roster_file: 'config/roster.json',
-    rules: 'config/rules.json', civ_pool: 'config/civ_pool.json', civ_styles: 'config/civ_styles.json',
+    rules_file: 'config/rules.json', civ_pool_file: 'config/civ_pool.json', civ_styles: 'config/civ_styles.json',
     matches_file: 'config/matches.json', helper_app: 'config/app.json',
     history_file: 'data/history.json', replay_analysis: 'data/replay_analysis.json', replay_games: 'data/replay_games.json',
     data_check: 'data/data_check.json', meta: 'data/meta.json',
@@ -63,13 +63,15 @@
     // tournament setup: the config files plus organizer changes made on the site since the last update
     // (site/js/admin-logic.js; the update job saves them into config/ every 30 minutes)
     config: {
-      inputs: ['players_file', 'tournaments_file', 'roster_file', 'matches_file', 'admin_changes'],
-      fn: (players, tournaments, roster, matches, changes) => TT_admin.apply({ players, tournaments, roster, matches }, changes),
+      inputs: ['players_file', 'tournaments_file', 'roster_file', 'matches_file', 'rules_file', 'civ_pool_file', 'admin_changes'],
+      fn: (players, tournaments, roster, matches, rules, civ_pool, changes) => TT_admin.apply({ players, tournaments, roster, matches, rules, civ_pool }, changes),
     },
     players: { inputs: ['config'], fn: (c) => c.players },
     tournaments: { inputs: ['config'], fn: (c) => c.tournaments },
     roster: { inputs: ['config'], fn: (c) => c.roster },
     matches_base: { inputs: ['config'], fn: (c) => c.matches },
+    rules: { inputs: ['config'], fn: (c) => c.rules },
+    civ_pool: { inputs: ['config'], fn: (c) => c.civ_pool },
     // all-time history: the file (updated every 30 minutes) plus any newer games fetched live in this browser
     history: { inputs: ['history_file'], fn: (h) => Live.merge(h) },
     // tournament games: the schedule (config/matches.json, where the update job saves confirmed games every
