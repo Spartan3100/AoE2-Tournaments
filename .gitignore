@@ -1,0 +1,6 @@
+data/
+data_enc/
+data_out/
+_site/
+__pycache__/
+*.pyc
