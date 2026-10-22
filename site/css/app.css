@@ -158,6 +158,16 @@ html.tt-locked #dash-root { display: none; }
 .tt .tt-list .sub { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
 .tt .tt-btns { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); }
 .tt .tt-btn.primary { border-color: var(--color-fg); }
+/* Organizer forms (Manage tournaments) */
+.tt .tt-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: var(--cds-gap-md); align-items: end; margin: 0 0 var(--cds-gap-md); }
+.tt .tt-form .wide { grid-column: 1 / -1; }
+.tt .tt-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tt .tt-field input, .tt .tt-field select { font: inherit; color: var(--color-fg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-xs) var(--cds-pad-sm); min-width: 0; }
+.tt .tt-checks { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs) var(--cds-gap-md); border: 0; padding: 0; margin: 0; }
+.tt .tt-check { display: inline-flex; align-items: center; gap: var(--cds-gap-xs); }
+.tt .tt-form .tt-note { margin: 0; }
+#manage-pending .tt-rules { margin-bottom: var(--cds-gap-md); }
+#manage-pending .tt-btn { padding: 0 var(--cds-pad-sm); margin-left: var(--cds-gap-xs); }
 .tt .tt-btn:disabled { opacity: .5; cursor: default; }
 .tt .tt-vs { font-family: var(--font-anthropic-serif); font-size: var(--cds-font-size-title); }
 .tt .tt-range { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-gap-xs); }

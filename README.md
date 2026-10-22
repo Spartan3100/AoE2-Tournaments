@@ -61,7 +61,11 @@ To remove someone: same card, **Remove**. They can't open the site any more. To 
 
 ## Running the tournament
 
-All tournament setup lives in `config/` and is edited on GitHub (pencil icon), or by asking Claude Code to do it:
+**On the site (organizers):** **All tournaments** tab > **Manage tournaments**. Add a tournament or change one (name, status, dates, format, playoff size, players), make its round-robin schedule, and add or change players. Everyone invited sees a change straight away; the next update writes it into `config/` on GitHub and it leaves the "waiting" list. **Undo** takes back a change that hasn't been written yet. A schedule can only be remade before any game of that tournament has been played.
+
+*Already set up before this was added?* Run `supabase/schema.sql` again in the Supabase SQL Editor (it's safe to run again) to create the table it uses.
+
+Everything else (rules, civ pools, fixing a result) lives in `config/` and is edited on GitHub (pencil icon), or by asking Claude Code to do it:
 
 | File | What it holds |
 |---|---|
@@ -76,6 +80,7 @@ All tournament setup lives in `config/` and is edited on GitHub (pencil icon), o
 - **A tournament game is detected** when two players in an active tournament play an online 1v1 that fills an open game in `matches.json` (or the next game of their playoff series). It appears on the Home tab.
 - **It counts** once both players confirm it, or the organizer approves it. The site shows it straight away, and the next update saves it into `config/matches.json`.
 - **Fixing a result:** edit that game in `config/matches.json`.
+- **Rules and civ pools for a new tournament:** add rows with its `tournament_id` (shown in `config/tournaments.json`, e.g. `t2`) to `rules.json` and `civ_pool.json`.
 - **Someone chose the wrong name under "I'm":** Supabase > **Table Editor > players_claim**, delete the row.
 
 ## How it works
@@ -84,8 +89,8 @@ All tournament setup lives in `config/` and is edited on GitHub (pencil icon), o
 site/        the website (index.html, js/, css/), served by GitHub Pages
 config/      tournament setup, edited by the organizers
 seed/        empty starting data for the very first run
-pipeline/    update.py (games, replays, checks), apply_confirmations.js, crypt.py (encryption)
-supabase/    schema.sql: invites, sign-in, confirmations, and who may read what
+pipeline/    update.py (games, replays, checks), apply_admin_changes.js, apply_confirmations.js, crypt.py (encryption)
+supabase/    schema.sql: invites, sign-in, confirmations, organizer changes, and who may read what
 .github/     the workflow that runs everything every 30 minutes
 ```
 

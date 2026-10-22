@@ -73,16 +73,21 @@ jobs:
       - name: Add new games, read replays, check accuracy
         run: python pipeline/update.py --max-replays 60
 
+      # tournaments and players added or edited by organizers on the site (Supabase table admin_changes)
+      - name: Save organizer changes
+        run: node pipeline/apply_admin_changes.js
+
       - name: Save confirmed tournament games
         run: node pipeline/apply_confirmations.js
 
-      - name: Commit confirmed games to main
+      - name: Commit organizer changes and confirmed games to main
         run: |
           git config user.name "aoe2-site-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- config/matches.json; then
-            git add config/matches.json
-            git commit -m "Confirmed tournament games"
+          files="config/matches.json config/tournaments.json config/roster.json config/players.json"
+          if ! git diff --quiet -- $files; then
+            git add $files
+            git commit -m "Organizer changes and confirmed tournament games"
             git pull --rebase origin main && git push origin HEAD:main
           fi
           # GitHub turns off scheduled runs after 60 days without commits; nudge it once a month
@@ -116,3 +121,7 @@ jobs:
           path: _site
       - id: deploy
         uses: actions/deploy-pages@v4
+
+      # only now, with the changes committed and published, take them out of the site's pending list
+      - name: Clear saved organizer changes
+        run: node pipeline/apply_admin_changes.js --clear
