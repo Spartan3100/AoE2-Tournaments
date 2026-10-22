@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AoE2 Tournaments</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237a1e1e'/%3E%3Cpath d='M12 9v14l11-7z' fill='%23f0d696'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/app.css">
+<meta name="robots" content="noindex, nofollow">
+<script>document.documentElement.classList.add('tt-locked');</script>
+</head>
+<body>
+<div id="dash-root">
+<div class="tt">
+  <header>
+    <h1 class="tt-title">AoE2 Tournaments</h1>
+    <p class="tt-take" id="takeaway">—</p>
+  </header>
+
+  <div class="tt-controls" id="t-bar">
+    <label class="tt-label" for="t-pick">Tournament</label>
+    <select id="t-pick" data-source="tournaments"></select>
+    <span class="tt-pill" id="t-status"></span>
+    <span class="tt-label" id="t-dates"></span>
+    <button type="button" class="tt-pill" id="check-badge" data-source="data_check" title="Open the data check"></button>
+    <label class="tt-label" for="me-pick">I'm</label>
+    <select id="me-pick" data-source="players" aria-label="Which player are you?"><option value="">Choose…</option></select>
+    <span id="auth-box" hidden></span>
+  </div>
+
+  <section class="tt-kpis" id="headline">
+    <div class="tt-card"><div class="tt-label">Games played</div><div class="tt-kpi-v dash-skeleton" data-k="played">—</div></div>
+    <div class="tt-card"><div class="tt-label">Games left in pool play</div><div class="tt-kpi-v dash-skeleton" data-k="remaining">—</div></div>
+    <div class="tt-card"><div class="tt-label">Players</div><div class="tt-kpi-v dash-skeleton" data-k="players">—</div></div>
+    <div class="tt-card"><div class="tt-label">Average game length (min)</div><div class="tt-kpi-v dash-skeleton" data-k="avg_minutes">—</div></div>
+  </section>
+
+  <nav class="tt-tabs" role="tablist">
+    <button role="tab" id="tab-home" data-tab="home">Home</button>
+    <button role="tab" id="tab-standings" data-tab="standings">Standings</button>
+    <button role="tab" id="tab-playoffs" data-tab="playoffs">Playoffs</button>
+    <button role="tab" id="tab-schedule" data-tab="schedule">Schedule</button>
+    <button role="tab" id="tab-civs-maps" data-tab="civs-maps">Civs &amp; maps</button>
+    <button role="tab" id="tab-format" data-tab="format">Format</button>
+    <button role="tab" id="tab-profiles" data-tab="profiles">Player profiles</button>
+    <button role="tab" id="tab-rivals" data-tab="rivals">Head to head</button>
+    <button role="tab" id="tab-review" data-tab="review">Match review</button>
+    <button role="tab" id="tab-all" data-tab="all">All tournaments</button>
+    <button role="tab" id="tab-check" data-tab="check">Data check</button>
+  </nav>
+
+  <!-- ===================== Home ===================== -->
+  <section class="tt-page" id="home">
+    <div class="tt-banner" id="home-fresh" data-source="data_check">Checking when the data was last updated…</div>
+    <div class="tt-card" id="home-me-card" hidden>
+      <h2 id="home-me-title">Your next game</h2>
+      <div id="home-me"></div>
+    </div>
+    <div class="tt-card" id="confirm-card">
+      <h2>Games waiting for confirmation</h2>
+      <p class="tt-note" id="confirm-note">Online 1v1 games between two players in this tournament that fill an open slot. A game counts once both players confirm it (or the organizer approves it).</p>
+      <ul class="tt-list" id="confirm-list" data-source="t_suggest"></ul>
+    </div>
+    <div class="tt-grid">
+      <div class="tt-card" id="home-next-card">
+        <h2>Up next</h2>
+        <ul class="tt-list" id="home-next" data-source="matches"></ul>
+      </div>
+      <div class="tt-card" id="home-latest-card">
+        <h2>Latest results</h2>
+        <ul class="tt-list" id="home-latest" data-source="matches"></ul>
+      </div>
+    </div>
+    <div class="tt-card" id="home-standings-card">
+      <h2>Standings</h2>
+      <div class="tt-scroll"><table id="home-standings" data-source="standings" data-row-key="tournament_id,player"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== Standings ===================== -->
+  <section class="tt-page" id="standings" hidden>
+    <div class="tt-grid">
+      <div class="tt-card" id="standings-card">
+        <h2>Pool play standings</h2>
+        <p class="tt-note">Ranked by wins, then fewest losses, then head-to-head result. Before any games are played, ties are listed alphabetically.</p>
+        <div class="tt-scroll"><table id="standings-table" data-source="standings" data-row-key="tournament_id,player"><thead></thead><tbody></tbody></table></div>
+      </div>
+      <div class="tt-card" id="h2h-card">
+        <h2>Head to head</h2>
+        <p class="tt-note">Each row's result against each column's player. W = won, L = lost, "vs" = not played yet.</p>
+        <div class="tt-scroll"><table id="h2h-table" data-source="h2h" data-row-key="tournament_id,player"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== Playoffs ===================== -->
+  <section class="tt-page" id="playoffs" hidden>
+    <div class="tt-card" id="bracket-card">
+      <h2>Playoff bracket</h2>
+      <p class="tt-note" id="bracket-note">Seeded from pool play standings. Players fill in when pool play ends.</p>
+      <div class="tt-bracket" id="bracket" data-source="bracket"></div>
+    </div>
+  </section>
+
+  <!-- ===================== Schedule ===================== -->
+  <section class="tt-page" id="schedule" hidden>
+    <div class="tt-card" id="schedule-card">
+      <h2>Game schedule</h2>
+      <p class="tt-note">Every scheduled game in this tournament. A result shows up here once both players confirm the game (Home tab) or the organizer approves it. Click a played game to review it.</p>
+      <div class="tt-scroll"><table id="schedule-table" data-source="matches" data-row-key="tournament_id,game"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== Civs & maps ===================== -->
+  <section class="tt-page" id="civs-maps" hidden>
+    <div class="tt-grid">
+      <div class="tt-card" id="civ-card">
+        <h2>Civilization win rate</h2>
+        <p class="tt-note">Share of approved games in this tournament won with each civ, all players combined.</p>
+        <div class="tt-chart" id="civ-chart" data-source="civ_stats"></div>
+      </div>
+      <div class="tt-card" id="map-card">
+        <h2>Games by map</h2>
+        <p class="tt-note">Approved games in this tournament played on each map.</p>
+        <div class="tt-chart" id="map-chart" data-source="map_stats"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== Format ===================== -->
+  <section class="tt-page" id="format" hidden>
+    <div class="tt-grid">
+      <div class="tt-card" id="format-card">
+        <h2>Tournament format</h2>
+        <p class="tt-note" id="format-note">How pool play and the playoffs work.</p>
+        <ul class="tt-rules" id="rules-list" data-source="rules"></ul>
+      </div>
+      <div class="tt-card" id="civ-pool-card">
+        <h2>Civ pools</h2>
+        <p class="tt-note">Each player picks only from their own list. Civs in bold are in every player's pool.</p>
+        <div class="tt-civs" id="civ-pool" data-source="civ_pool"></div>
+      </div>
+      <div class="tt-card" id="seeding-card">
+        <h2>Current playoff seeding</h2>
+        <p class="tt-note">Seeds follow the pool play standings and lock in when pool play ends.</p>
+        <div class="tt-scroll"><table id="seed-table" data-source="standings" data-row-key="tournament_id,player"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== Profiles ===================== -->
+  <section class="tt-page" id="profiles" hidden>
+    <div class="tt-controls">
+      <label class="tt-label" for="pp-player">Player</label>
+      <select id="pp-player" data-source="players"></select>
+      <div class="tt-chips" id="pp-scope" role="group" aria-label="Games"></div>
+      <div class="tt-chips" id="pp-period" role="group" aria-label="Period"></div>
+    </div>
+
+    <div class="tt-kpis" id="pp-kpis">
+      <div class="tt-card"><div class="tt-label">Games</div><div class="tt-kpi-v" data-k="games">—</div></div>
+      <div class="tt-card"><div class="tt-label">Win rate</div><div class="tt-kpi-v" data-k="win_rate">—</div></div>
+      <div class="tt-card"><div class="tt-label" id="pp-rating-label">Latest rating</div><div class="tt-kpi-v" data-k="rating_now">—</div><div class="tt-kpi-s" data-k2="rating_peak"></div></div>
+      <div class="tt-card"><div class="tt-label">Avg game (real min)</div><div class="tt-kpi-v" data-k="avg_minutes">—</div></div>
+      <div class="tt-card"><div class="tt-label">Best win streak</div><div class="tt-kpi-v" data-k="best_streak">—</div><div class="tt-kpi-s" data-k2="streak_now"></div></div>
+      <div class="tt-card"><div class="tt-label">Avg eAPM (replays)</div><div class="tt-kpi-v" data-k3="eapm">—</div><div class="tt-kpi-s" data-k3s="analyzed"></div></div>
+    </div>
+
+    <h3 class="tt-sec" id="pp-identity-h">Civ identity</h3>
+    <p class="tt-note">Across this player's games in the chosen period. "Best" needs at least 5 games with the civ.</p>
+    <div class="tt-id" id="pp-identity" data-source="p_identity"></div>
+
+    <h3 class="tt-sec" id="pp-strategy-h">Strategy</h3>
+    <p class="tt-note">Read automatically from each game's replay: what they build, research and send where. <a href="#how" id="how-link">How strategies are read</a></p>
+    <div class="tt-card" id="pp-findings-card">
+      <h2>Scouting report</h2>
+      <p class="tt-note">The patterns that stand out in this view.</p>
+      <ul class="tt-rules" id="pp-findings"></ul>
+    </div>
+    <div class="tt-grid">
+      <div class="tt-card" id="pp-open-card">
+        <h2>Openings</h2>
+        <p class="tt-note">Dark and Feudal Age plan, with win rate and average age-up times.</p>
+        <div class="tt-scroll"><table id="pp-open" data-source="s_openings" data-row-key="player,scope,opening"><thead></thead><tbody></tbody></table></div>
+      </div>
+      <div class="tt-card" id="pp-castle-card">
+        <h2>Castle Age plans</h2>
+        <p class="tt-note">What they do after reaching Castle Age.</p>
+        <div class="tt-scroll"><table id="pp-castle" data-source="s_castle" data-row-key="player,scope,castle_plan"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <div class="tt-grid">
+      <div class="tt-card" id="pp-attack-card">
+        <h2>Attack style</h2>
+        <p class="tt-note">When their army first reaches the enemy base, and how often it goes back.</p>
+        <div class="tt-scroll"><table id="pp-attack" data-source="s_attack" data-row-key="player,scope,attack_style"><thead></thead><tbody></tbody></table></div>
+      </div>
+      <div class="tt-card" id="pp-defense-card">
+        <h2>Defense style</h2>
+        <p class="tt-note">Walls, towers and castles at home, and counter units.</p>
+        <div class="tt-scroll"><table id="pp-defense" data-source="s_defense" data-row-key="player,scope,defense_style"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <div class="tt-grid">
+      <div class="tt-card" id="pp-tempo-card">
+        <h2>Tempo: wins vs losses</h2>
+        <p class="tt-note">Average minutes (game time) to each age and to the first attack.</p>
+        <div class="tt-scroll"><table id="pp-tempo" data-source="s_tempo" data-row-key="player,scope,result"><thead></thead><tbody></tbody></table></div>
+      </div>
+      <div class="tt-card" id="pp-units-card">
+        <h2>Army composition</h2>
+        <p class="tt-note">Share of military units queued, from replays.</p>
+        <div class="tt-chart" id="pp-units" data-source="s_units"></div>
+      </div>
+    </div>
+
+    <h3 class="tt-sec" id="pp-compare-h">Compare periods</h3>
+    <div class="tt-card" id="pp-seasons-card">
+      <h2>Seasons</h2>
+      <p class="tt-note">Every calendar year and every tournament, across all game types. Rating is 1v1 ranked, from the first to the last ranked game in the season.</p>
+      <div class="tt-scroll"><table id="pp-seasons" data-source="p_seasons" data-row-key="player,season"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tt-card" id="pp-range-card">
+      <h2>Custom date ranges</h2>
+      <p class="tt-note">Pick any two date ranges to compare side by side. Uses the game type chosen at the top.</p>
+      <div class="tt-controls">
+        <div class="tt-range"><span class="tt-label">Range A</span><input type="date" id="cr-a1" min="2020-01-01" max="2099-12-31" aria-label="Range A from"><span class="tt-label">to</span><input type="date" id="cr-a2" min="2020-01-01" max="2099-12-31" aria-label="Range A to"></div>
+        <div class="tt-range"><span class="tt-label">Range B</span><input type="date" id="cr-b1" min="2020-01-01" max="2099-12-31" aria-label="Range B from"><span class="tt-label">to</span><input type="date" id="cr-b2" min="2020-01-01" max="2099-12-31" aria-label="Range B to"></div>
+        <button type="button" class="tt-btn" id="cr-reset">This year vs last year</button>
+      </div>
+      <div class="tt-scroll" id="pp-range-box" data-source="history"><table id="pp-range"><thead></thead><tbody></tbody></table></div>
+    </div>
+
+    <h3 class="tt-sec">Results</h3>
+    <div class="tt-card" id="pp-rating-card">
+      <h2 id="pp-rating-title">Rating over time</h2>
+      <p class="tt-note">Rating after each ranked game: 1v1 and team.</p>
+      <div class="tt-chart" id="pp-rating" data-source="history"></div>
+    </div>
+    <div class="tt-grid">
+      <div class="tt-card" id="pp-style-card">
+        <h2>Civ styles played</h2>
+        <p class="tt-note">Share of games by the civ's main strength, with win rate.</p>
+        <div class="tt-chart" id="pp-style" data-source="p_styles"></div>
+      </div>
+      <div class="tt-card" id="pp-length-card">
+        <h2>Win rate by game length</h2>
+        <p class="tt-note">Real-time minutes. Short games favour rushes, long games favour booms.</p>
+        <div class="tt-chart" id="pp-length" data-source="p_length"></div>
+      </div>
+    </div>
+    <div class="tt-grid">
+      <div class="tt-card" id="pp-civs-card">
+        <h2>Civs</h2>
+        <p class="tt-note">Most-played civs and how often they win with them.</p>
+        <div class="tt-scroll tt-tall"><table id="pp-civs" data-source="p_civs" data-row-key="player,scope,civ"><thead></thead><tbody></tbody></table></div>
+      </div>
+      <div class="tt-card" id="pp-maps-card">
+        <h2>Maps</h2>
+        <p class="tt-note">Results on each map.</p>
+        <div class="tt-scroll tt-tall"><table id="pp-maps" data-source="p_maps" data-row-key="player,scope,map"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <div class="tt-grid">
+      <div class="tt-card" id="pp-vs-card">
+        <h2>Against opponent civs</h2>
+        <p class="tt-note">1v1 results by the civ the opponent played.</p>
+        <div class="tt-scroll tt-tall"><table id="pp-vs" data-source="p_vs_civ" data-row-key="player,scope,opp_civ"><thead></thead><tbody></tbody></table></div>
+      </div>
+      <div class="tt-card" id="pp-tourn-card">
+        <h2>Tournament record</h2>
+        <p class="tt-note">Pool play results in every tournament they entered.</p>
+        <div class="tt-scroll"><table id="pp-tourn" data-source="standings" data-row-key="tournament_id,player"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <div class="tt-card" id="pp-recent-card">
+      <h2>Recent games</h2>
+      <p class="tt-note">The latest 40 games in this view. Click an analyzed game to review it.</p>
+      <div class="tt-scroll tt-tall"><table id="pp-recent" data-source="history" data-row-key="player,match_id"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tt-card" id="how">
+      <h2>How strategies are read</h2>
+      <p class="tt-note">From each game's replay file, which records every command a player gives.</p>
+      <ul class="tt-rules">
+        <li><b>Opening:</b> units made before Castle Age. 3 or more militia in Dark Age is a Drush; towers built near the enemy is a tower rush; Castle Age within about 5½ minutes of Feudal with fewer than 4 military units is Fast Castle; otherwise the most-made Feudal unit (scouts, archers, men-at-arms, skirms & spears).</li>
+        <li><b>Castle Age plan:</b> 2 or more extra Town Centers in Castle Age is a boom; otherwise the most-made Castle Age unit type.</li>
+        <li><b>Attack style:</b> when the army is first ordered into the enemy's base (the starting scout doesn't count). Before 12 minutes is early pressure, 12–22 mid-game, later is a late attacker. Many separate minutes of raids add "constant raids"; 3+ siege units used aggressively add "siege pushes".</li>
+        <li><b>Defense style:</b> 15+ wall tiles by Feudal Age, 25+ wall tiles in total, 3+ towers or castles near home, a third or more of the army as skirmishers or spearmen.</li>
+        <li><b>Times</b> are game time; unit counts are units queued, so a few may have been cancelled.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== Head to head ===================== -->
+  <section class="tt-page" id="rivals" hidden>
+    <div class="tt-controls">
+      <label class="tt-label" for="hh-a">Player</label>
+      <select id="hh-a" data-source="players"></select>
+      <span class="tt-label">vs</span>
+      <select id="hh-b" data-source="players" aria-label="Opponent"></select>
+      <div class="tt-chips" id="hh-period" role="group" aria-label="Period"></div>
+    </div>
+    <div class="tt-kpis" id="hh-kpis">
+      <div class="tt-card"><div class="tt-label">1v1 record</div><div class="tt-kpi-v" id="hh-record">—</div><div class="tt-kpi-s" id="hh-rate"></div></div>
+      <div class="tt-card"><div class="tt-label">Team games against each other</div><div class="tt-kpi-v" id="hh-teamvs">—</div><div class="tt-kpi-s" id="hh-teamvs-s"></div></div>
+      <div class="tt-card"><div class="tt-label">Team games together</div><div class="tt-kpi-v" id="hh-with">—</div><div class="tt-kpi-s" id="hh-with-s"></div></div>
+      <div class="tt-card"><div class="tt-label">Last played each other</div><div class="tt-kpi-v" id="hh-last">—</div></div>
+    </div>
+    <div class="tt-grid">
+      <div class="tt-card" id="hh-maps-card">
+        <h2>By map</h2>
+        <p class="tt-note">Their 1v1s against each other on each map, from the first player's side.</p>
+        <div class="tt-scroll tt-tall"><table id="hh-maps" data-source="rival_maps" data-row-key="a,b,period,map"><thead></thead><tbody></tbody></table></div>
+      </div>
+      <div class="tt-card" id="hh-civs-card">
+        <h2>Civs picked</h2>
+        <p class="tt-note">The civ the first player chose in these 1v1s, and how it went.</p>
+        <div class="tt-scroll tt-tall"><table id="hh-civs" data-source="rival_civs" data-row-key="a,b,period,civ"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <div class="tt-card" id="hh-games-card">
+      <h2>Games against each other</h2>
+      <p class="tt-note">Every 1v1 and team game they played on opposite sides in this period, newest first.</p>
+      <div class="tt-scroll tt-tall"><table id="hh-games" data-source="history" data-row-key="player,match_id"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== Match review ===================== -->
+  <section class="tt-page" id="review" hidden>
+    <div class="tt-card" id="rv-list-card">
+      <h2>Analyzed games</h2>
+      <p class="tt-note" id="rv-list-note">Every game of your players with a replay. Pick one to review. Playback is kept for 30 days after a game; the analysis stays.</p>
+      <div class="tt-controls">
+        <label class="tt-label" for="rv-player">Player</label>
+        <select id="rv-player" data-source="players"></select>
+        <label class="tt-label" for="rv-type">Games</label>
+        <select id="rv-type">
+          <option value="">All games</option>
+          <option value="Tournament">Tournament</option>
+          <option value="Ranked 1v1">Ranked 1v1</option>
+          <option value="Ranked team">Ranked team</option>
+          <option value="Unranked &amp; other">Unranked &amp; other</option>
+        </select>
+      </div>
+      <div class="tt-scroll tt-tall"><table id="rv-list" data-source="review_list" data-row-key="match_id"><thead></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="tt-card" id="rv-game-card">
+      <h2 id="rv-game-title">Game</h2>
+      <p class="tt-note" id="rv-game-note">Pick a game above.</p>
+      <div class="tt-links" id="rv-links"></div>
+      <p class="tt-note" id="rv-dl-note"></p>
+    </div>
+
+    <div class="tt-card" id="rv-helper-card">
+      <h2>Watch games in AoE2 on your PC</h2>
+      <p class="tt-note">One-time setup on each Windows PC that has Age of Empires II: DE. After that, “Watch in AoE2” downloads the game’s replay, opens CaptureAge if you have it, and starts the game.</p>
+      <div class="tt-links">
+        <a class="tt-btn" id="rv-helper-dl" href="downloads/AoE2Replay.zip" download>⬇ Download AoE2 Replay for Windows</a>
+        <span class="tt-note" id="rv-helper-ver">Version <span data-source="helper_app" data-field="version" data-row="0">—</span></span>
+      </div>
+      <p class="tt-note" id="rv-helper-status" role="status"></p>
+      <ol class="tt-note" id="rv-helper-steps">
+        <li>Unzip <b>AoE2Replay.zip</b> and double-click <b>AoE2Replay.exe</b>. It installs itself for your Windows user (no admin rights).</li>
+        <li>If Windows says “Windows protected your PC”, click <b>More info</b> → <b>Run anyway</b>. The app isn’t code-signed, so Windows doesn’t recognise it yet.</li>
+        <li>Click “Watch in AoE2” on any game. The first time, your browser asks to open AoE2 Replay: allow it and tick “Always allow”.</li>
+        <li>To remove it: Settings → Apps → “AoE2 Replay”, or open it from the Start menu and click Uninstall.</li>
+      </ol>
+    </div>
+
+    <div class="tt-card" id="rv-viewer-card">
+      <h2>Game playback</h2>
+      <p class="tt-note">Three looks: <b>Map</b> (whole map with live soldier dots and a heatmap of where armies or working villagers have been), <b>Detailed</b> (every unit with its type, villager jobs, attack lines and building progress) and <b>Game-style</b> (the same playback drawn like the game). Switch to any player's view to see their fog of war; their card lists the key upgrades they've researched so far. Units' positions are worked out from the orders each player gave, so they're close but not exact.</p>
+      <div id="rv-viewer"></div>
+    </div>
+
+    <div class="tt-card" id="rv-compare-card">
+      <h2>Side by side</h2>
+      <p class="tt-note">Each tracked player's game, read from the replay.</p>
+      <div class="tt-scroll"><table id="rv-compare" data-source="replay_analysis" data-row-key="match_id,profile_id"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tt-grid" id="rv-build-grid"></div>
+  </section>
+
+  <!-- ===================== All tournaments ===================== -->
+  <section class="tt-page" id="all" hidden>
+    <div class="tt-card" id="all-card">
+      <h2>All tournaments</h2>
+      <p class="tt-note">Active, upcoming and completed tournaments. Click one to open it.</p>
+      <div class="tt-scroll"><table id="all-table" data-source="t_overview" data-row-key="tournament_id"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tt-card" id="players-card">
+      <h2>Players</h2>
+      <p class="tt-note">Everyone added to any tournament. Steam names and profile IDs are what the update job uses to find each player's games.</p>
+      <div class="tt-scroll"><table id="players-table" data-source="players" data-row-key="player"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tt-card" id="members-card" hidden>
+      <h2>Who can open this site</h2>
+      <p class="tt-note">Only people you invite can open the site. Create a link, send it to one person, and they sign in with it once. Each link works once, for 14 days. Only organizers see this.</p>
+      <div class="tt-btns"><button type="button" class="tt-btn primary" id="invite-btn">Create an invite link</button></div>
+      <p class="tt-note" id="invite-out" role="status"></p>
+      <div class="tt-scroll"><table id="members-table"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== Data check ===================== -->
+  <section class="tt-page" id="check" hidden>
+    <div class="tt-card" id="check-card">
+      <h2>Is the data right?</h2>
+      <p class="tt-note" id="check-note">After every update the job re-checks the dashboard against AoE2 Companion (a separate site that records the same games) and against itself: missing games, ratings, civs and results, duplicates and broken links.</p>
+      <div class="tt-scroll"><table id="check-table" data-source="data_check" data-row-key="check"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tt-card" id="spot-card">
+      <h2>Check it yourself</h2>
+      <p class="tt-note">The 12 newest games in the dashboard. Open any one on AoE2 Companion or AoE2 Insights and compare the civ, result, rating change and map.</p>
+      <div class="tt-scroll"><table id="spot-table" data-source="history" data-row-key="player,match_id"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tt-card" id="check-how">
+      <h2>What can and can't be checked</h2>
+      <ul class="tt-rules">
+        <li><b>Games, civs, results, ratings, maps:</b> come straight from the official match records, and are checked against AoE2 Companion after every update.</li>
+        <li><b>Replay results:</b> when a replay and the match records disagree on who won, the official record is used.</li>
+        <li><b>Strategies, unit types and positions:</b> worked out from each replay's orders by fixed rules (see "How strategies are read" in Player profiles). They can't be checked against another site; to check one, use "Watch in AoE2" in Match review and compare.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+</div>
+<script src="vendor/d3.min.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="js/confirm-logic.js"></script>
+<script src="js/dash.js"></script>
+<script src="js/backend.js"></script>
+<script src="js/calcs.js"></script>
+<script src="js/viewer.js"></script>
+<script src="js/render.js"></script>
+<script src="js/helper.js"></script>
+</body>
+</html>

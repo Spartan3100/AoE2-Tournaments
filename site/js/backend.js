@@ -1,0 +1,253 @@
+// Who can open the site, sign-in, "I'm" and confirmations, stored in Supabase (supabase/schema.sql, README.md).
+//
+// The site is invite-only: its data files are encrypted, and the key is only given (by the database rules) to
+// people who signed in and joined with an invite link, plus the organizers. Until then a sign-in screen shows.
+//
+// The page was written for claude.ai's `window.claude` runtime; this file also provides that small surface
+// (db + user) backed by Supabase, so render.js didn't need to change.
+(() => {
+  const st = { client: null, session: null, admin: false, member: false, claim: '', configured: false, rows: [], msg: '', showForm: false, providers: [], email: false };
+  const listeners = [];
+  const emit = () => listeners.forEach((f) => { try { f(); } catch (e) { console.error(e); } });
+  const el = (id) => document.getElementById(id);
+  const mk = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const button = (text, fn, cls) => { const b = mk('button', 'tt-btn' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.addEventListener('click', fn); return b; };
+  const ls = { get: (k) => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }, set: (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) { /* blocked */ } } };
+  const home = () => location.origin + location.pathname;
+  let resolveReady;
+  const ready = new Promise((r) => { resolveReady = r; });
+
+  // an invite link is ".../?invite=CODE": keep the code through the sign-in redirect
+  (() => {
+    const q = new URLSearchParams(location.search);
+    if (q.get('invite')) {
+      ls.set('tt-invite', q.get('invite'));
+      q.delete('invite');
+      try { history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); } catch (e) { /* ignore */ }
+    }
+  })();
+
+  async function init() {
+    let cfg = {};
+    try { cfg = await (await fetch('config/supabase.json', { cache: 'no-cache' })).json(); } catch (e) { cfg = {}; }
+    if (!cfg.url || !cfg.anon_key || !window.supabase) {
+      gate('This site isn’t set up yet.', 'The organizer still needs to connect the sign-in database (see the README).');
+      resolveReady();
+      return;
+    }
+    st.configured = true;
+    st.providers = Array.isArray(cfg.providers) ? cfg.providers : ['discord'];
+    st.email = cfg.email === true;
+    st.client = window.supabase.createClient(cfg.url, cfg.anon_key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+    try { const { data } = await st.client.auth.getSession(); st.session = data.session; } catch (e) { st.session = null; }
+    st.client.auth.onAuthStateChange((event, s) => {
+      const was = st.session && st.session.user.id;
+      st.session = s;
+      if ((s && s.user.id) !== was) location.reload();
+    });
+    await open();
+    resolveReady();
+  }
+
+  // sign-in screen, or the site once the key is in hand
+  async function open() {
+    if (!st.session) { gate(ls.get('tt-invite') ? 'You’ve been invited' : 'Sign in', ls.get('tt-invite') ? 'Sign in to accept your invite to the AoE2 Tournaments site.' : 'This site is for invited players. Sign in to open it.', true); return; }
+    let key = await fetchKey();
+    if (!key && ls.get('tt-invite')) {
+      const { data, error } = await st.client.rpc('redeem_invite', { p_code: ls.get('tt-invite') });
+      ls.set('tt-invite', '');
+      if (error) console.error(error);
+      if (data) key = await fetchKey();
+      else st.msg = 'That invite link has already been used or has expired. Ask the organizer for a new one.';
+    }
+    if (!key) {
+      gate('You’re signed in, but not invited yet', 'Ask the organizer for an invite link, then open it on this device.', false, true);
+      return;
+    }
+    st.member = true;
+    const raw = Uint8Array.from(atob(key), (c) => c.charCodeAt(0));
+    window.TT_setKey(await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']));
+    await refreshMe();
+    await loadVotes();
+    setInterval(() => { if (document.visibilityState === 'visible') loadVotes(); }, 20000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadVotes(); });
+    const g = el('tt-gate');
+    if (g) g.remove();
+    document.documentElement.classList.remove('tt-locked');
+    window.dispatchEvent(new Event('resize'));
+    renderMembers();
+  }
+
+  async function fetchKey() {
+    const { data, error } = await st.client.from('site_secret').select('key').maybeSingle();
+    if (error) { console.error(error); return ''; }
+    return data ? data.key : '';
+  }
+
+  function signInButtons(box) {
+    const names = { discord: 'Discord', google: 'Google', github: 'GitHub' };
+    st.providers.forEach((p, i) => box.append(button(`Sign in with ${names[p] || p}`, async () => {
+      const { error } = await st.client.auth.signInWithOAuth({ provider: p, options: { redirectTo: home() } });
+      if (error) { st.msg = `Couldn’t start sign-in: ${error.message}`; redraw(); }
+    }, i === 0 ? 'primary' : '')));
+    if (st.email) {
+      if (!st.showForm) box.append(button(st.providers.length ? 'Email me a link instead' : 'Sign in with email', () => { st.showForm = true; redraw(); }));
+      else {
+        const input = mk('input'); input.type = 'email'; input.placeholder = 'Your email'; input.autocomplete = 'email'; input.setAttribute('aria-label', 'Your email');
+        const send = async () => {
+          const email = input.value.trim();
+          if (!/^\S+@\S+\.\S+$/.test(email)) { st.msg = 'Type your email address.'; redraw(); return; }
+          const { error } = await st.client.auth.signInWithOtp({ email, options: { emailRedirectTo: home() } });
+          st.msg = error ? `Couldn’t send the link: ${error.message}` : `Check ${email} for a sign-in link.`;
+          redraw();
+        };
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+        box.append(input, button('Send link', send));
+        setTimeout(() => input.focus(), 0);
+      }
+    }
+  }
+
+  let lastGate = null;
+  function redraw() { if (lastGate) gate(...lastGate); }
+  function gate(title, text, showSignIn, showSignOut) {
+    lastGate = [title, text, showSignIn, showSignOut];
+    document.documentElement.classList.add('tt-locked');
+    const draw = () => {
+      let g = el('tt-gate');
+      if (!g) { g = mk('div'); g.id = 'tt-gate'; document.body.prepend(g); }
+      g.replaceChildren(mk('h1', '', title), mk('p', '', text));
+      const row = mk('div', 'tt-btns');
+      if (showSignIn) signInButtons(row);
+      if (showSignOut) row.append(button('Sign out', async () => { await st.client.auth.signOut(); location.reload(); }));
+      if (row.childNodes.length) g.append(row);
+      if (st.msg) g.append(mk('p', 'err', st.msg));
+    };
+    if (document.body) draw(); else document.addEventListener('DOMContentLoaded', draw);
+  }
+
+  async function refreshMe() {
+    st.admin = false; st.claim = '';
+    if (st.session) {
+      try {
+        const { data } = await st.client.from('players_claim').select('player').eq('user_id', st.session.user.id).maybeSingle();
+        st.claim = data ? data.player : '';
+        const r = await st.client.rpc('is_admin');
+        st.admin = !!r.data;
+      } catch (e) { console.error(e); }
+    }
+    renderAuth();
+  }
+
+  async function loadVotes() {
+    const { data, error } = await st.client.from('confirmations').select('*');
+    if (error) { console.error(error); return; }
+    st.rows = data || [];
+    if (window.dash && dash._setData) dash._setData('votes', st.rows);
+    emit();
+  }
+
+  async function claim(player) {
+    const uid = st.session.user.id;
+    const q = player
+      ? st.client.from('players_claim').upsert({ user_id: uid, player }, { onConflict: 'user_id' })
+      : st.client.from('players_claim').delete().eq('user_id', uid);
+    const { error } = await q;
+    if (error) {
+      st.msg = /duplicate|unique/i.test(error.message) ? `Someone else already chose ${player}. Ask the organizer to free it up if that's you.` : `Couldn’t save who you are: ${error.message}`;
+      renderAuth();
+      throw error;
+    }
+    st.claim = player; st.msg = ''; renderAuth(); renderMembers();
+  }
+
+  async function vote(d) {
+    const row = { tournament_id: d.tournament_id, match_id: String(d.match_id), side: d.side, player: d.player, answer: d.answer, user_id: st.session.user.id };
+    const { error } = await st.client.from('confirmations').upsert(row, { onConflict: 'tournament_id,match_id,side' });
+    if (error) throw error;
+    await loadVotes();
+  }
+
+  // ---------------------------------------------------------------- header: who's signed in
+  function renderAuth() {
+    const box = el('auth-box');
+    if (!box) return;
+    box.hidden = false;
+    box.replaceChildren(mk('span', 'tt-label', `Signed in${st.claim ? ` as ${st.claim}` : ''}${st.admin ? ' · organizer' : ''}`),
+      button('Sign out', async () => { await st.client.auth.signOut(); location.reload(); }));
+    if (!st.claim) box.append(mk('span', 'tt-label', '· choose yourself under “I’m”'));
+    if (st.msg) box.append(mk('span', 'tt-label', st.msg));
+  }
+
+  // ---------------------------------------------------------------- organizers: invites and members
+  async function renderMembers() {
+    const card = el('members-card');
+    if (!card) return;
+    card.hidden = !st.admin;
+    if (!st.admin) return;
+    const t = el('members-table');
+    const { data, error } = await st.client.rpc('members_list');
+    if (error) { el('invite-out').textContent = `Couldn’t load the list: ${error.message}`; return; }
+    const head = mk('tr');
+    ['Player', 'Signed in as', 'Joined', ''].forEach((h) => head.append(mk('th', '', h)));
+    t.tHead.replaceChildren(head);
+    const rows = (data || []).map((m) => {
+      const tr = mk('tr');
+      tr.append(mk('td', '', m.player || 'Not chosen yet'), mk('td', '', m.email || ''), mk('td', '', new Date(m.added_at).toLocaleDateString()));
+      const td = mk('td');
+      td.append(button('Remove', async () => {
+        if (!confirm(`Remove ${m.player || m.email || 'this person'}? They won't be able to open the site any more.`)) return;
+        const r = await st.client.rpc('remove_member', { p_user: m.user_id });
+        el('invite-out').textContent = r.error ? `Couldn’t remove: ${r.error.message}` : 'Removed.';
+        renderMembers();
+      }));
+      tr.append(td);
+      return tr;
+    });
+    if (!rows.length) { const tr = mk('tr'); const td = mk('td', 'tt-empty', 'Nobody has joined yet. Create an invite link and send it to a friend.'); td.colSpan = 4; tr.append(td); rows.push(tr); }
+    t.tBodies[0].replaceChildren(...rows);
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const b = el('invite-btn');
+    if (!b) return;
+    b.addEventListener('click', async () => {
+      const out = el('invite-out');
+      const { data, error } = await st.client.rpc('create_invite');
+      if (error) { out.textContent = `Couldn’t create a link: ${error.message}`; return; }
+      const link = `${home()}?invite=${data}`;
+      const code = mk('code', '', link); code.style.userSelect = 'all';
+      out.replaceChildren('Send this link to one person: ', code, ' ');
+      out.append(button('Copy', async () => { try { await navigator.clipboard.writeText(link); out.lastChild.textContent = 'Copied'; } catch (e) { /* select it by hand */ } }));
+    });
+  });
+
+  // ---------------------------------------------------------------- the window.claude surface render.js uses
+  const none = { get: async () => ({ exists: false, data: () => undefined }), set: async () => { throw new Error('not available'); }, update: async () => { throw new Error('not available'); }, acquire: async () => ({ acquired: false }) };
+  const db = {
+    doc(path) {
+      if (/^data\/users\/[^/]+\/me$/.test(path)) return { ...none, get: async () => ({ exists: !!st.claim, data: () => ({ player: st.claim }) }), set: async (d) => claim(d.player) };
+      if (path.startsWith('confirm/')) return { ...none, set: async (d) => vote(d) };
+      return none;
+    },
+    collection() {
+      return {
+        onSnapshot(next) {
+          const fire = () => next({ docs: st.rows.map((r) => ({ id: `${r.tournament_id}_${r.match_id}_${r.side}`, data: () => r })) });
+          listeners.push(fire); fire();
+          return () => {};
+        },
+      };
+    },
+  };
+  const user = {
+    id: async () => (st.session ? st.session.user.id : null),
+    isOwner: async () => st.admin,
+    canEdit: async () => st.admin,
+    can: async () => !!st.session && st.member,
+    me: async () => ({ id: st.session ? st.session.user.id : null, name: st.claim || '', isOwner: st.admin, canEdit: st.admin }),
+  };
+  window.claude = { use: async (name) => { await ready; if (!st.member) return null; return name === 'db' ? db : name === 'user' ? user : null; } };
+  window.TT_BACKEND = st;
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();

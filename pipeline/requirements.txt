@@ -1,0 +1,2 @@
+mgz==1.8.51
+cryptography>=42
