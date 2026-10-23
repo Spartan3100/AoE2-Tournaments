@@ -99,7 +99,7 @@ def main():
             if parts:
                 # AoE2 Companion also counts games that never got a result, so a few percent short is normal
                 add(f'{name}: whole match history is in the dashboard', 'Completeness', 'pass' if worst >= 0.95 else 'warn' if worst >= 0.5 else 'fail',
-                    '; '.join(parts), 'Compared with AoE2 Companion\'s totals. Older games are fetched about 40 pages (800 games) per update, so a long history fills in over a few hours.')
+                    '; '.join(parts), 'Compared with AoE2 Companion\'s totals. Older games are fetched about 150 pages (3,000 games) per update, so a long history fills in over a few updates.')
         except Exception as e:  # noqa: BLE001
             add(f'{name}: whole match history is in the dashboard', 'Completeness', 'warn', 'Could not reach AoE2 Companion', str(e)[:200])
         # latest 1v1 rating

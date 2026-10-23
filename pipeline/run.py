@@ -152,7 +152,8 @@ def main():
     ap.add_argument('--max-replays', type=int, default=40)
     ap.add_argument('--playback-days', type=int, default=0, help='0 = keep map playback for every game')
     ap.add_argument('--max-playbacks', type=int, default=0, help='0 = no limit; otherwise keep playback for this many of the newest games')
-    ap.add_argument('--backfill-pages', type=int, default=40, help='older match-list pages to fetch per run, all players together')
+    # 40 pages spaced 1.5 s apart never drew a 429 (2026-10-23); 150 takes ~4 minutes per run and still pauses cleanly if refused
+    ap.add_argument('--backfill-pages', type=int, default=150, help='older match-list pages to fetch per run, all players together')
     ap.add_argument('--replay-days', type=int, default=0, help='0 = try every game in the history; otherwise only games this recent')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
