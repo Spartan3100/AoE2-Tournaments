@@ -157,6 +157,29 @@ def main():
         add('Replays that downloaded could be read', 'Accuracy', 'pass' if bad_share <= 0.05 else 'warn' if bad_share <= 0.2 else 'fail',
             f'{len(read)} read, {len(unread)} unreadable', 'Many unreadable replays usually means a game update the replay reader does not support yet.')
 
+    # 8. no game missed: every game is analysed, or the reason it isn't is known
+    settled = (now - dt.timedelta(days=3)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    by_id = {str(g['match_id']): g for g in games}
+    want = {}
+    for r in history:
+        if r['started'] < settled and r.get('type') != 'Other':
+            want.setdefault(str(r['match_id']), r)
+    state = collections.Counter()
+    open_ = []
+    for mid, r in sorted(want.items(), key=lambda kv: kv[1]['started'], reverse=True):
+        st = str(by_id.get(mid, {}).get('status', 'Not tried yet'))
+        st = 'Analyzed' if st.startswith('Analyzed') else st
+        state[st] += 1
+        if st not in ('Analyzed', 'No replay') and len(open_) < 8:
+            open_.append(f"{r['started'][:10]} {r.get('map', '')} ({r['player']} vs {r.get('opp_name') or r.get('opp_civs') or '?'}): {st}")
+    if want:
+        # "No replay" is a known answer (no player's copy is on Microsoft's server); the rest still need work
+        todo, bad = state['Not tried yet'], state['Could not read']
+        add('Every game is analysed or has no replay', 'Accuracy', 'fail' if bad > max(2, len(want) // 20) else 'warn' if todo or bad else 'pass',
+            f"{state['Analyzed']} of {len(want)} analysed" + ''.join(f', {n} {k.lower()}' for k, n in state.items() if k != 'Analyzed'),
+            ('Still open: ' + '; '.join(open_) + '. Older games are worked through 60 per update, newest first.' if open_ else
+             '"No replay" means no player\'s copy of that game is on Microsoft\'s server (it keeps replays for a limited time). Analysis already made is kept for good.'))
+
     with open(a.out, 'w') as f:
         json.dump(rows, f, indent=1)
     print(json.dumps(collections.Counter(r['status'] for r in rows)))

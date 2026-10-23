@@ -466,7 +466,7 @@
         { field: 'map', label: 'Map' },
         { field: 'result', label: 'Result', wrap: true },
         { field: 'duration_min', label: 'Min', num: true, fmt: (v) => d3.format('.0f')(v) },
-        { field: 'has_playback', label: 'Playback', fmt: (v) => (Number(v) === 1 ? 'Yes' : 'Expired') },
+        { field: 'has_playback', label: 'Playback', fmt: (v) => (Number(v) === 1 ? 'Yes' : 'Not yet') },
       ], 'match_id', {
         emptyText: 'No analyzed games yet. They appear here once the update job has read their replays. Try the sample game below to see the viewer.',
         onClick: (r) => dash.setParams({ m: r.match_id }),
@@ -521,7 +521,7 @@
     const pbId = isSample ? 'pb_sample' : g && g.has_playback ? g.playback_id : '';
     if (!pbId) {
       vbox.removeAttribute('data-source');
-      vbox.replaceChildren(empty(g ? 'Playback is kept for the 40 newest analyzed games, so this one has none. The analysis below stays, and the replay can still be downloaded from the links above while Microsoft keeps it.' : 'Pick a game above.'));
+      vbox.replaceChildren(empty(g ? 'This game’s map playback hasn’t been rebuilt yet (older games are redone a few at a time with each update). The analysis below is complete.' : 'Pick a game above.'));
     } else {
       vbox.dataset.source = pbId;
       window.TT_viewer(vbox, pbId, (n) => (pidOf.size ? steamOr(n) : n));

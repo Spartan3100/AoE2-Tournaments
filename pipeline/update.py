@@ -56,7 +56,7 @@ def main():
         wj(os.path.join(inp, n + '.json'), rj(os.path.join(DATA, n + '.json'), []))
     before = len(rj(os.path.join(DATA, 'history.json'), []))
     code = py(os.path.join(HERE, 'run.py'), '--in', inp, '--out', out, '--max-replays', str(a.max_replays),
-              '--playback-days', '30', '--max-playbacks', '40')
+              '--playback-days', '0', '--max-playbacks', '0')  # 0 = map playback for every game
     manifest = rj(os.path.join(out, 'manifest.json'), {})
     if code != 0 or not manifest:
         print('run.py failed; keeping the previous data', flush=True)
