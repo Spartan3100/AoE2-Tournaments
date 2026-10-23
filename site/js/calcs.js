@@ -575,18 +575,26 @@ dash.calc('s_units', {
 });
 
 dash.calc('review_list', {
-  inputs: ['replay_games', 'history', 'h_scoped'], title: 'Analyzed games',
-  description: 'Every game with a replay read, newest first, with the tracked players in it, the result for each, and whether map playback is still kept.',
+  inputs: ['replay_games', 'history', 'h_scoped'], title: 'Games',
+  description: 'Every game of the tracked players, newest first: the result for each player (from the match list), and whether its replay was found and analysed. A game without a replay still shows, with its strategy details unknown.',
   fn: (replay_games, history, h_scoped) => {
     const sc = new Map(h_scoped.map((r) => [r.player + '|' + r.match_id, r.scopes.split('|')]));
-    return replay_games.filter((g) => String(g.status || '').startsWith('Analyzed')).map((g) => {
-      const hs = history.filter((r) => String(r.match_id) === String(g.match_id));
-      const scopes = new Set(hs.flatMap((r) => sc.get(r.player + '|' + String(r.match_id)) || []));
+    const games = new Map(replay_games.map((g) => [String(g.match_id), g]));
+    const byMatch = new Map();
+    history.forEach((r) => { const k = String(r.match_id); if (!byMatch.has(k)) byMatch.set(k, []); byMatch.get(k).push(r); });
+    const week = new Date(Date.now() - 3 * 864e5).toISOString();
+    return [...byMatch.entries()].map(([mid, hs]) => {
+      const g = games.get(mid) || {};
+      const st = String(g.status || '');
+      // analysed | waiting (recent, replay not up yet, or not tried yet) | missing (no player's copy on the server) | unreadable
+      const replay = st.startsWith('Analyzed') ? 'analysed' : st === 'No replay' ? 'missing' : st === 'Could not read' ? 'unreadable'
+        : hs[0].type === 'Other' ? 'missing' : hs[0].started >= week || !st ? 'waiting' : 'missing';
+      const scopes = new Set(hs.flatMap((r) => sc.get(r.player + '|' + mid) || []));
       return {
-        match_id: String(g.match_id), started: g.started, type: g.type, map: g.map, duration_min: g.duration_min,
+        match_id: mid, started: hs[0].started, type: hs[0].type, map: g.map || hs[0].map, duration_min: g.duration_min ?? hs[0].duration_min,
         players: hs.map((r) => r.player).join(', '),
         result: hs.map((r) => `${r.player} ${Number(r.won) === 1 ? 'won' : 'lost'} as ${r.civ}`).join('; '),
-        tournament: scopes.has('Tournament') ? 1 : 0,
+        tournament: scopes.has('Tournament') ? 1 : 0, replay,
         views: [...scopes].join('|'), has_playback: Number(g.has_playback) === 1 ? 1 : 0, playback_id: g.playback_id || '',
       };
     }).sort((a, b) => (a.started < b.started ? 1 : -1));
