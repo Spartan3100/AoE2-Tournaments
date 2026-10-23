@@ -55,6 +55,34 @@ for g in bad:
     with open(path, 'wb') as f:
         f.write(raw)
     print('record bytes', len(raw), 'head', raw[:16].hex())
+    if not g.get('regression') and '(Scenario)' not in str(g.get('map')):
+        import re, struct
+        from mgz.fast import header as fh
+        with open(path, 'rb') as f:
+            hdr = fh.decompress(f)
+            version, game, save, log = fh.parse_version(hdr, f)
+        fh.parse_de(hdr, version, save)
+        start = hdr.tell()
+        rest = hdr.read()[4:]
+        meta = struct.Struct('<24xf17xhbxb')
+        z = re.search(b'\x00' * 4096, rest)
+        end = re.compile(b'\x00+').match(rest, z.start()).end()
+        print('zero run', z.start(), '->', end, 'len', end - z.start(), 'of', len(rest))
+        print('bytes before end', rest[end - 32:end].hex())
+        print('bytes after end ', rest[end:end + 96].hex())
+        # every place in the header that looks like a settings block, anywhere
+        hits = []
+        for sp in (1.0, 1.5, 1.7, 2.0):
+            for m in re.finditer(re.escape(struct.pack('<f', sp)), rest):
+                at = m.start() - 24
+                if at < 0 or at + meta.size > len(rest):
+                    continue
+                speed, owner, n, cheats = meta.unpack_from(rest, at)
+                if 2 <= n <= 9 and 0 <= owner <= 8 and cheats in (0, 1):
+                    hits.append((at, sp, owner, n, cheats))
+        hits.sort()
+        print('settings-like blocks:', len(hits), 'first ones:', hits[:12])
+        print('after the zero run:', [h for h in hits if h[0] >= z.start()][:6])
     try:
         res = parse_replay(path, match_id=mid, keep_playback=True)
         print(('regression check OK: ' if g.get('regression') else 'READS FINE NOW: ') + f"{len(res['players'])} players, {res['game'].get('duration_min')} min, {len(res['build'])} build steps")
