@@ -46,7 +46,7 @@ AN_COLS = ['match_id', 'number', 'name', 'profile_id', 'civ', 'won', 'map', 'dur
            'market_trades', 'techs', 'unit_data', 'resigned_min', 'player', 'started', 'type', 'opp_civs', 'opp_openings',
            'build_order', 'unit_mix']
 GAME_COLS = ['match_id', 'started', 'type', 'map', 'players_tracked', 'checked_at', 'map_size', 'dimension', 'duration_min',
-             'rated', 'version', 'players', 'status', 'has_playback', 'playback_id', 'replay_profile_id']
+             'rated', 'version', 'players', 'status', 'has_playback', 'playback_id', 'replay_profile_id', 'retried']
 
 
 def load(path, default):
@@ -109,6 +109,7 @@ def history_rows(m, roster_by_pid):
     if not any(pick(q, 'won') in (True, False, 1, 0) for _, q in everyone):
         return []  # no result recorded (abandoned or still being scored): left out, like AoE2 Companion's stats
     gtype = game_type(m, n)
+    ids = replay_ids(everyone)
     rows = []
     for team_id, p in everyone:
         pid = str(pick(p, 'profileId', 'profile_id', default=''))
@@ -127,9 +128,16 @@ def history_rows(m, roster_by_pid):
             'players_n': n, 'won': 1 if won is True or won == 1 else 0,
             'rating': pick(p, 'rating'), 'rating_diff': pick(p, 'ratingDiff', 'rating_diff'),
             'duration_min': round((f - s).total_seconds() / 60 * 1.0, 1),
-            'replay': 1 if pick(p, 'replay') else 0, 'profile_id': pid,
+            'replay': 1 if pick(p, 'replay') else 0, 'profile_id': pid, 'replay_ids': ids,
         })
     return rows
+
+
+def replay_ids(everyone):
+    """Profile IDs of everyone in the match, those the match list says saved a replay first. Each player's game saves
+    its own copy, so when one copy is missing on the server another player's usually is not."""
+    ids = [(0 if pick(p, 'replay') else 1, str(pick(p, 'profileId', 'profile_id', default=''))) for _, p in everyone]
+    return ','.join(dict.fromkeys(pid for _, pid in sorted(ids, key=lambda x: x[0]) if pid))
 
 
 def main():
@@ -137,9 +145,9 @@ def main():
     ap.add_argument('--in', dest='inp', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--max-replays', type=int, default=40)
-    ap.add_argument('--playback-days', type=int, default=30)
-    ap.add_argument('--max-playbacks', type=int, default=40, help='keep map playback for at most this many of the newest games')
-    ap.add_argument('--replay-days', type=int, default=60, help='only try replays of games this recent')
+    ap.add_argument('--playback-days', type=int, default=0, help='0 = keep map playback for every game')
+    ap.add_argument('--max-playbacks', type=int, default=0, help='0 = no limit; otherwise keep playback for this many of the newest games')
+    ap.add_argument('--replay-days', type=int, default=0, help='0 = try every game in the history; otherwise only games this recent')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     now = dt.datetime.now(dt.timezone.utc)
@@ -153,6 +161,7 @@ def main():
 
     # ---------- 1. new matches
     known = {(r['player'], r['match_id']) for r in history}
+    by_key = {(r['player'], r['match_id']): r for r in history}
     cutoff = now - dt.timedelta(days=WINDOW_DAYS)
     added = 0
     for pid, name in roster.items():
@@ -175,6 +184,10 @@ def main():
                         stop = True
                         continue
                     if (r['player'], r['match_id']) in known:
+                        if r.get('replay_ids'):
+                            have = by_key.get((r['player'], r['match_id']))
+                            if have is not None and not have.get('replay_ids'):
+                                have['replay_ids'] = r['replay_ids']
                         # reached games we already have; keep going through the last 2 days, since games can finish out of order
                         if r['started'] < recent_cut:
                             stop = True
@@ -188,26 +201,46 @@ def main():
     history.sort(key=lambda r: (r['started'], r['player']), reverse=True)
 
     # ---------- 2. replays
-    done = {g['match_id'] for g in games}
-    rcut = (now - dt.timedelta(days=a.replay_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
-    todo = {}
+    # every game gets one try (newest first, max_replays per run); analysis is kept for good once made, so a player's
+    # stats survive after Microsoft deletes the replay
+    rcut = (now - dt.timedelta(days=a.replay_days)).strftime('%Y-%m-%dT%H:%M:%SZ') if a.replay_days else ''
+    by_match = {}
     for r in history:
-        if r['match_id'] in done or r['started'] < rcut or r['type'] == 'Other':
-            continue
-        todo.setdefault(r['match_id'], []).append(r)
+        if r['started'] >= rcut and r['type'] != 'Other':
+            by_match.setdefault(r['match_id'], []).append(r)
+    status = {g['match_id']: g for g in games}
+    todo, again = {}, {}
+    for mid, rows in by_match.items():
+        g = status.get(mid)
+        if g is None:
+            todo[mid] = rows
+        elif g.get('status') == 'No replay' and not g.get('retried') and any(r.get('replay_ids') for r in rows):
+            todo[mid] = rows  # tried before with only our players' copies: try everyone's once
+        elif g.get('status') == 'Analyzed, playback expired' and not g.get('retried'):
+            again[mid] = rows  # analysed, but its playback was dropped by the old 40-game limit: rebuild it once
     new_pb = []
     tried = 0
     # what happened to each replay this run (printed in the log and kept in data/meta.json)
     outcome = {'analyzed': 0, 'not_available_yet': 0, 'no_replay': 0, 'unreadable': 0, 'download_failed': 0}
-    for mid, rows in sorted(todo.items(), key=lambda kv: kv[1][0]['started'], reverse=True):
+    order = sorted(todo.items(), key=lambda kv: kv[1][0]['started'], reverse=True) + sorted(again.items(), key=lambda kv: kv[1][0]['started'], reverse=True)
+    for mid, rows in order:
         if tried >= a.max_replays:
             break
         tried += 1
+        playback_only = mid in again
+        old = status.get(mid)
+        if old is not None:
+            games.remove(old)  # replaced below by what this attempt finds
         data, used_pid, failed_dl = None, None, False
+        # whose copy of the replay to ask for: our players who saved one, then everyone in the match (those who saved
+        # one first, see replay_ids), then our other players (older rows have no replay_ids)
+        own = [(r, r.get('profile_id') or next((k for k, v in roster.items() if v == r['player']), None)) for r in rows]
+        pids = [pid for r, pid in own if int(r.get('replay') or 0)]
         for r in rows:
-            pid = r.get('profile_id') or next((k for k, v in roster.items() if v == r['player']), None)
-            if not pid:
-                continue
+            pids += (r.get('replay_ids') or '').split(',')
+        pids += [pid for _, pid in own]
+        pids = [p for p in dict.fromkeys(pids) if p][:10]
+        for pid in pids:
             try:
                 data = get(REPLAY.format(mid=mid, pid=pid), binary=True)
             except Exception as e:  # noqa: BLE001
@@ -217,9 +250,23 @@ def main():
                 used_pid = pid
                 break
         base = {'match_id': mid, 'started': rows[0]['started'], 'type': rows[0]['type'], 'map': rows[0]['map'],
-                'players_tracked': ', '.join(sorted({r['player'] for r in rows})), 'checked_at': now.strftime('%Y-%m-%dT%H:%M:%SZ')}
+                'players_tracked': ', '.join(sorted({r['player'] for r in rows})), 'checked_at': now.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'retried': 1 if old is not None else 0}
+        if not data and playback_only:
+            games.append({**old, 'retried': 1, 'checked_at': base['checked_at']})  # replay no longer on the server: keep the analysis
+            outcome['no_replay'] += 0 if failed_dl else 1
+            outcome['download_failed'] += 1 if failed_dl else 0
+            continue
+        if not data and old is not None and not failed_dl:
+            games.append({**old, 'retried': 1, 'checked_at': base['checked_at']})
+            outcome['no_replay'] += 1
+            continue
+        if not data and old is not None:
+            games.append(old)  # download error: try again next run
+            outcome['download_failed'] += 1
+            continue
         if not data:
-            # keep trying recent games on later runs; give up once they are older than replay-days
+            # games under 3 days old are tried again on later runs (a replay can take a while to appear); older ones are "No replay"
             age_days = (now - dt.datetime.fromisoformat(rows[0]['started'].replace('Z', '+00:00'))).days
             if failed_dl:
                 outcome['download_failed'] += 1
@@ -242,20 +289,21 @@ def main():
                 else:
                     with open(path, 'wb') as f:
                         f.write(data)
-                # every recent game gets playback; step 3 then keeps only the newest max_playbacks. (This used to also
-                # require fewer than max_playbacks stored, which locked new games out once the store was full.)
-                fresh = rows[0]['started'] >= (now - dt.timedelta(days=a.playback_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
+                # 0 = no limit (the default now); otherwise only games this recent get playback
+                fresh = not a.playback_days or rows[0]['started'] >= (now - dt.timedelta(days=a.playback_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
                 res = parse_replay(path, match_id=mid, keep_playback=fresh)
         except Exception as e:  # noqa: BLE001
             errors.append(f'parse {mid}: {type(e).__name__}: {e}')
             outcome['unreadable'] += 1
-            games.append({**base, 'status': 'Could not read', 'has_playback': 0})
+            games.append({**old, 'retried': 1} if playback_only else {**base, 'status': 'Could not read', 'has_playback': 0})
             continue
         outcome['analyzed'] += 1
+        if old is not None and not playback_only:
+            analysis[:] = [x for x in analysis if str(x.get('match_id')) != str(mid)]  # no duplicate rows on a retry
         pid_to_player = roster
         names_by_pid = {}
         by_num = {r['number']: r for r in res['players']}
-        for row in res['players']:
+        for row in ([] if playback_only else res['players']):
             row['player'] = pid_to_player.get(str(row.get('profile_id') or ''), '')
             if not row['player']:
                 continue  # only analyse the dashboard's own players
@@ -290,8 +338,9 @@ def main():
 
     # ---------- 3. playback retention
     expired = []
-    pcut = (now - dt.timedelta(days=a.playback_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
-    keep = {g['match_id'] for g in sorted((g for g in games if g.get('has_playback')), key=lambda g: g['started'], reverse=True)[:a.max_playbacks]}
+    pcut = (now - dt.timedelta(days=a.playback_days)).strftime('%Y-%m-%dT%H:%M:%SZ') if a.playback_days else ''
+    newest = sorted((g for g in games if g.get('has_playback')), key=lambda g: g['started'], reverse=True)
+    keep = {g['match_id'] for g in (newest[:a.max_playbacks] if a.max_playbacks else newest)}
     for g in games:
         if g.get('has_playback') and (g['started'] < pcut or g['match_id'] not in keep):
             g['has_playback'] = 0
