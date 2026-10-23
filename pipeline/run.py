@@ -152,6 +152,7 @@ def main():
     ap.add_argument('--max-replays', type=int, default=40)
     ap.add_argument('--playback-days', type=int, default=0, help='0 = keep map playback for every game')
     ap.add_argument('--max-playbacks', type=int, default=0, help='0 = no limit; otherwise keep playback for this many of the newest games')
+    ap.add_argument('--backfill-pages', type=int, default=40, help='older match-list pages to fetch per run, all players together')
     ap.add_argument('--replay-days', type=int, default=0, help='0 = try every game in the history; otherwise only games this recent')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -163,46 +164,78 @@ def main():
     history = load(os.path.join(a.inp, 'history.json'), [])
     analysis = load(os.path.join(a.inp, 'replay_analysis.json'), [])
     games = load(os.path.join(a.inp, 'replay_games.json'), [])
+    backfill = load(os.path.join(a.inp, 'backfill.json'), {})  # profile id -> {page, done}: how far each history is fetched
+    if not isinstance(backfill, dict):
+        backfill = {}
+    stats_note = []
 
-    # ---------- 1. new matches
+    # ---------- 1. matches
     known = {(r['player'], r['match_id']) for r in history}
     by_key = {(r['player'], r['match_id']): r for r in history}
     cutoff = now - dt.timedelta(days=WINDOW_DAYS)
+    cut = cutoff.strftime('%Y-%m-%dT%H:%M:%SZ')
     added = 0
+
+    def take(ms):
+        """Add every new row in these matches (for any tracked player); returns this page's rows."""
+        nonlocal added
+        rows = [r for m in ms for r in history_rows(m, roster) if r['started'] >= cut]
+        for r in rows:
+            k = (r['player'], r['match_id'])
+            if k in known:
+                have = by_key.get(k)
+                if r.get('replay_ids') and have is not None and not have.get('replay_ids'):
+                    have['replay_ids'] = r['replay_ids']
+                continue
+            known.add(k)
+            by_key[k] = r
+            history.append(r)
+            added += 1
+        return rows
+
+    def page_of(pid, page):
+        d = get(API.format(pid=pid, page=page))
+        return pick(d, 'matches', default=[]) if isinstance(d, dict) else (d or [])
+
+    # 1a. new games: each player's newest pages, until one of THEIR OWN games we already have (older than 2 days, as
+    # games can finish out of order). A game shared with another tracked player doesn't count: that once stopped a
+    # player's download after one page because the first player's download had already added their shared games.
+    recent_cut = (now - dt.timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
     for pid, name in roster.items():
-        # a player with no games yet (first run, or newly added) gets their whole history; otherwise just the newest pages
-        max_page = 40 if any(r['player'] == name for r in history) else 1000
-        for page in range(1, max_page):
+        mine_before = {mid for (p, mid) in known if p == name}
+        for page in range(1, 11):
             try:
-                d = get(API.format(pid=pid, page=page))
+                ms = page_of(pid, page)
             except Exception as e:  # noqa: BLE001
                 errors.append(f'match list for {name}: {e}')
                 break
-            ms = pick(d, 'matches', default=[]) if isinstance(d, dict) else (d or [])
             if not ms:
                 break
-            stop = False
-            recent_cut = (now - dt.timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
-            for m in ms:
-                for r in history_rows(m, roster):
-                    if r['started'] < cutoff.strftime('%Y-%m-%dT%H:%M:%SZ'):
-                        stop = True
-                        continue
-                    if (r['player'], r['match_id']) in known:
-                        if r.get('replay_ids'):
-                            have = by_key.get((r['player'], r['match_id']))
-                            if have is not None and not have.get('replay_ids'):
-                                have['replay_ids'] = r['replay_ids']
-                        # reached games we already have; keep going through the last 2 days, since games can finish out of order
-                        if r['started'] < recent_cut:
-                            stop = True
-                        continue
-                    known.add((r['player'], r['match_id']))
-                    history.append(r)
-                    added += 1
-            if stop:
+            rows = take(ms)
+            if any(r['player'] == name and r['match_id'] in mine_before and r['started'] < recent_cut for r in rows):
                 break
-            time.sleep(0.5)
+            time.sleep(1)
+
+    # 1b. older games: each player's full history, a few pages per run (AoE2 Companion refuses quick bursts of
+    # requests with "429 Too Many Requests"), resuming where the last run stopped. New games only push older ones
+    # onto later pages, so resuming by page number can repeat a game (skipped as known) but never miss one.
+    pages_left = a.backfill_pages
+    for pid, name in roster.items():
+        st = backfill.setdefault(pid, {'page': 1, 'done': False})
+        while not st['done'] and pages_left > 0:
+            try:
+                ms = page_of(pid, st['page'])
+            except Exception as e:  # noqa: BLE001
+                stats_note.append(f'history backfill paused at {name} page {st["page"]}: {e}'[:200])
+                pages_left = 0  # refused: try again next run
+                break
+            pages_left -= 1
+            if not ms:
+                st['done'] = True
+                break
+            take(ms)
+            st['page'] += 1
+            time.sleep(1.5)
     history.sort(key=lambda r: (r['started'], r['player']), reverse=True)
 
     # ---------- 2. replays
@@ -377,7 +410,9 @@ def main():
     analysis = [r for r in analysis if r.get('started', '9') >= cutoff.strftime('%Y-%m-%dT%H:%M:%SZ')]
     games = [g for g in games if g['started'] >= cutoff.strftime('%Y-%m-%dT%H:%M:%SZ')]
 
-    written = []
+    with open(os.path.join(a.out, 'backfill.json'), 'w') as f:
+        json.dump(backfill, f)
+    written = ['backfill.json']
     for name, rows, cols in (('history.json', history, None), ('replay_analysis.json', analysis, AN_COLS), ('replay_games.json', games, GAME_COLS)):
         if not rows and cols:
             # the dashboard can't read an empty JSON list, so an empty result is a header-only CSV
@@ -395,7 +430,9 @@ def main():
                   'replays_not_available_yet': outcome['not_available_yet'], 'replays_missing': outcome['no_replay'],
                   'replays_unreadable': outcome['unreadable'], 'custom_scenarios': outcome['scenario'], 'replay_download_errors': outcome['download_failed'],
                   'playbacks_stored': sum(1 for g in games if g.get('has_playback')),
-                  'history_rows': len(history), 'analysis_rows': len(analysis)},
+                  'history_rows': len(history), 'analysis_rows': len(analysis),
+                  'history_backfill': {roster.get(k, k): ('done' if v.get('done') else f"page {v.get('page')}") for k, v in backfill.items()},
+                  'notes': stats_note},
         'errors': errors[:50],
     }
     with open(os.path.join(a.out, 'manifest.json'), 'w') as f:

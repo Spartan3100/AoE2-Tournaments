@@ -84,6 +84,24 @@ def main():
         add(f'{name}: all games from the last 7 days are in the dashboard', 'Completeness',
             'pass' if not missing else 'fail', f'{len(recent) - len(missing)} of {len(recent)} found',
             ('Missing match IDs: ' + ', '.join(missing[:10])) if missing else 'Compared with AoE2 Companion (games older than 3 hours).')
+        # whole history: game counts against AoE2 Companion's own totals per leaderboard (ranked + quick play)
+        try:
+            prof = get(f'https://data.aoe2companion.com/api/profiles/{pid}')
+            lbs = {str(lb.get('leaderboardId')): int(lb.get('games') or 0) for lb in (prof or {}).get('leaderboards', []) or []}
+            parts = []
+            worst = 1.0
+            for label, kind, ids in (('ranked 1v1', '1v1 ranked', ('rm_1v1', 'qp_rm_1v1')), ('ranked team', 'Team ranked', ('rm_team', 'qp_rm_team'))):
+                theirs = sum(lbs.get(i, 0) for i in ids)
+                ours = sum(1 for r in history if r['player'] == name and r.get('type') == kind)
+                if theirs:
+                    parts.append(f'{label} {ours:,} of {theirs:,}')
+                    worst = min(worst, ours / theirs)
+            if parts:
+                # AoE2 Companion also counts games that never got a result, so a few percent short is normal
+                add(f'{name}: whole match history is in the dashboard', 'Completeness', 'pass' if worst >= 0.95 else 'warn' if worst >= 0.5 else 'fail',
+                    '; '.join(parts), 'Compared with AoE2 Companion\'s totals. Older games are fetched about 40 pages (800 games) per update, so a long history fills in over a few hours.')
+        except Exception as e:  # noqa: BLE001
+            add(f'{name}: whole match history is in the dashboard', 'Completeness', 'warn', 'Could not reach AoE2 Companion', str(e)[:200])
         # latest 1v1 rating
         api_1v1 = [m for m in api if m.get('leaderboardId') == 'rm_1v1' and m.get('finished')]
         mine = sorted((r for r in history if r['player'] == name and r['type'] == '1v1 ranked' and r.get('rating') is not None), key=lambda r: r['started'])
