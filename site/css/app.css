@@ -73,6 +73,7 @@ html.tt-locked #dash-root { display: none; }
 .tt td.wrap { white-space: normal; min-width: 14rem; }
 .tt td.win { color: var(--color-ok); }
 .tt td.loss { color: var(--color-bad); }
+.tt td.warn, .tt .tt-warn { color: var(--color-warn); }
 .tt tr.click { cursor: pointer; }
 .tt tr.click:hover td { background: var(--color-bg); }
 .tt tr.sel td { background: var(--color-bg); font-weight: var(--cds-font-weight-medium); }

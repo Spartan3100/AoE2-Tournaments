@@ -231,6 +231,17 @@
     const where = { player, scope };
     const pick = (id) => { const d = dash.data(id); return d.status === 'ok' ? d.data.filter((r) => r.player === player && r.scope === scope) : null; };
 
+    // how many of these games the strategy figures below come from (the rest have no readable replay)
+    const cov = el('pp-coverage');
+    const hsc = dash.data('h_scoped'), ana = dash.data('replay_analysis');
+    if (hsc.status === 'ok' && ana.status === 'ok') {
+      const mine = new Set(hsc.data.filter((r) => r.player === player && r.scopes.split('|').includes(scope)).map((r) => r.match_id));
+      const read = new Set(ana.data.filter((a) => a.player === player && mine.has(String(a.match_id))).map((a) => String(a.match_id)));
+      const gap = mine.size - read.size;
+      cov.hidden = !gap;
+      cov.textContent = gap ? `⚠ Strategy figures below come from ${num(read.size)} of ${num(mine.size)} games in this view. The other ${num(gap)} have no replay that could be read, so their openings, ages and armies are unknown (their results still count in the figures above). Match review lists which.` : '';
+    }
+
     // headline figures
     const sum = pick('p_summary');
     const row = sum && sum[0];
@@ -429,9 +440,10 @@
   }
 
   // ---------------------------------------------------------------- match review
-  const rvPlayer = el('rv-player'), rvType = el('rv-type');
+  const rvPlayer = el('rv-player'), rvType = el('rv-type'), rvReplay = el('rv-replay');
   rvPlayer.addEventListener('change', () => dash.setParams({ rp: rvPlayer.value || null }));
   rvType.addEventListener('change', () => dash.setParams({ rt: rvType.value || null }));
+  rvReplay.addEventListener('change', () => dash.setParams({ rr: rvReplay.value || null }));
   const appVer = () => { const d = dash.data('helper_app'); return d.status === 'ok' && d.data[0] ? String(d.data[0].version) : ''; };
   const links = (mid, pids) => {
     const a = (href, text) => { const n = mk('a', '', text); n.href = href; n.target = '_blank'; n.rel = 'noopener noreferrer'; return n; };
@@ -448,27 +460,36 @@
     return out;
   };
 
+  const REPLAY_LABEL = { analysed: 'Analysed', waiting: '⚠ Waiting for replay', missing: '⚠ No replay', unreadable: '⚠ Couldn’t read' };
+  const REPLAY_WHY = {
+    waiting: 'the replay isn’t on Microsoft’s server yet (it’s tried again every update for 3 days), so the openings, age-up times, army and build orders are unknown for now. The result and civs above are from the match list.',
+    missing: 'no player’s copy of the replay is on Microsoft’s server, so the openings, age-up times, army and build orders are unknown. The result and civs above are from the match list.',
+    unreadable: 'the replay downloaded but couldn’t be read (usually a game update the replay reader doesn’t support yet), so the strategy details are unknown. The result and civs above are from the match list.',
+  };
   function drawReview(names) {
     if (document.activeElement !== rvPlayer) {
       rvPlayer.replaceChildren(new Option('All players', ''), ...names.map((n) => new Option(steamOr(n), n)));
       rvPlayer.value = P().rp && names.includes(P().rp) ? P().rp : '';
     }
     rvType.value = P().rt || '';
+    rvReplay.value = P().rr || '';
     const list = dash.data('review_list');
     const tbl = el('rv-list');
     let rows = [];
     if (list.status === 'error') failed(tbl.tBodies[0]);
     else if (list.status === 'ok') {
-      rows = list.data.filter((r) => (!P().rp || r.players.split(', ').includes(P().rp)) && (!P().rt || r.views.split('|').includes(P().rt)));
+      rows = list.data.filter((r) => (!P().rp || r.players.split(', ').includes(P().rp)) && (!P().rt || r.views.split('|').includes(P().rt))
+        && (!P().rr || (P().rr === 'analysed' ? r.replay === 'analysed' : r.replay !== 'analysed')));
       fillTable(tbl, rows, [
         { field: 'started', label: 'Date', fmt: (v) => d3.utcFormat('%b %-d, %Y')(new Date(v)) },
         { field: 'type', label: 'Type', fmt: (v, r) => (r.tournament ? `Tournament · ${v}` : v) },
         { field: 'map', label: 'Map' },
         { field: 'result', label: 'Result', wrap: true },
         { field: 'duration_min', label: 'Min', num: true, fmt: (v) => d3.format('.0f')(v) },
-        { field: 'has_playback', label: 'Playback', fmt: (v) => (Number(v) === 1 ? 'Yes' : 'Not yet') },
+        { field: 'replay', label: 'Replay', fmt: (v) => REPLAY_LABEL[v] || v, cls: (v) => (v === 'analysed' ? '' : 'warn') },
+        { field: 'has_playback', label: 'Playback', fmt: (v, r) => (Number(v) === 1 ? 'Yes' : r.replay === 'analysed' ? 'Not yet' : '—') },
       ], 'match_id', {
-        emptyText: 'No analyzed games yet. They appear here once the update job has read their replays. Try the sample game below to see the viewer.',
+        emptyText: 'No games match these filters.',
         onClick: (r) => dash.setParams({ m: r.match_id }),
         selected: (r) => r.match_id === P().m,
       });
@@ -500,7 +521,8 @@
         document.createTextNode(g ? ` · ${d3.utcFormat('%b %-d, %Y')(new Date(g.started))}` : ''));
       note.replaceChildren();
       if (g) note.append(mark('review_list', { match_id: mid }, 'result', g.result, 'span'), ` · ${d3.format('.0f')(g.duration_min)} min · ${g.tournament ? 'Tournament game · ' : ''}${g.type}`);
-      else note.textContent = 'This game hasn’t been analyzed.';
+      else note.textContent = 'This game isn’t in the match list.';
+      if (g && g.replay !== 'analysed') note.append(mk('span', 'tt-warn', ` · ⚠ ${REPLAY_WHY[g.replay]}`));
       const wp = hs.map((r) => [r.player, r.profile_id || pidOf.get(r.player)]).filter(([, p]) => p);
       lk.replaceChildren(...links(mid, wp));
       const dl = el('rv-dl-note');
@@ -521,7 +543,7 @@
     const pbId = isSample ? 'pb_sample' : g && g.has_playback ? g.playback_id : '';
     if (!pbId) {
       vbox.removeAttribute('data-source');
-      vbox.replaceChildren(empty(g ? 'This game’s map playback hasn’t been rebuilt yet (older games are redone a few at a time with each update). The analysis below is complete.' : 'Pick a game above.'));
+      vbox.replaceChildren(empty(!g ? 'Pick a game above.' : g.replay !== 'analysed' ? 'No map playback for this game: its replay isn’t available (see the note above).' : 'This game’s map playback hasn’t been rebuilt yet (older games are redone a few at a time with each update). The analysis below is complete.'));
     } else {
       vbox.dataset.source = pbId;
       window.TT_viewer(vbox, pbId, (n) => (pidOf.size ? steamOr(n) : n));

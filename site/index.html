@@ -173,6 +173,7 @@
 
     <h3 class="tt-sec" id="pp-strategy-h">Strategy</h3>
     <p class="tt-note">Read automatically from each game's replay: what they build, research and send where. <a href="#how" id="how-link">How strategies are read</a></p>
+    <p class="tt-note tt-warn" id="pp-coverage" hidden></p>
     <div class="tt-card" id="pp-findings-card">
       <h2>Scouting report</h2>
       <p class="tt-note">The patterns that stand out in this view.</p>
@@ -329,8 +330,8 @@
   <!-- ===================== Match review ===================== -->
   <section class="tt-page" id="review" hidden>
     <div class="tt-card" id="rv-list-card">
-      <h2>Analyzed games</h2>
-      <p class="tt-note" id="rv-list-note">Every game of your players with a replay. Pick one to review. Every game whose replay is on Microsoft’s server gets the analysis and map playback.</p>
+      <h2>Games</h2>
+      <p class="tt-note" id="rv-list-note">Every game of your players. Pick one to review. Games whose replay is on Microsoft’s server get the full analysis and map playback; a game marked ⚠ was played (the result and civs come from the match list), but its strategy details are unknown.</p>
       <div class="tt-controls">
         <label class="tt-label" for="rv-player">Player</label>
         <select id="rv-player" data-source="players"></select>
@@ -341,6 +342,12 @@
           <option value="Ranked 1v1">Ranked 1v1</option>
           <option value="Ranked team">Ranked team</option>
           <option value="Unranked &amp; other">Unranked &amp; other</option>
+        </select>
+        <label class="tt-label" for="rv-replay">Replay</label>
+        <select id="rv-replay">
+          <option value="">Any</option>
+          <option value="analysed">Analysed</option>
+          <option value="problem">⚠ Not analysed</option>
         </select>
       </div>
       <div class="tt-scroll tt-tall"><table id="rv-list" data-source="review_list" data-row-key="match_id"><thead></thead><tbody></tbody></table></div>
