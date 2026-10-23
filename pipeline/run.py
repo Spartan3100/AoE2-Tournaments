@@ -197,6 +197,8 @@ def main():
         todo.setdefault(r['match_id'], []).append(r)
     new_pb = []
     tried = 0
+    # what happened to each replay this run (printed in the log and kept in data/meta.json)
+    outcome = {'analyzed': 0, 'not_available_yet': 0, 'no_replay': 0, 'unreadable': 0, 'download_failed': 0}
     for mid, rows in sorted(todo.items(), key=lambda kv: kv[1][0]['started'], reverse=True):
         if tried >= a.max_replays:
             break
@@ -219,10 +221,15 @@ def main():
         if not data:
             # keep trying recent games on later runs; give up once they are older than replay-days
             age_days = (now - dt.datetime.fromisoformat(rows[0]['started'].replace('Z', '+00:00'))).days
+            if failed_dl:
+                outcome['download_failed'] += 1
             if failed_dl and len([e for e in errors if e.startswith('replay ')]) >= 3:
                 break  # downloads are failing (network or server), not missing: try again next run
             if age_days >= 3 and not failed_dl:
+                outcome['no_replay'] += 1
                 games.append({**base, 'status': 'No replay', 'has_playback': 0})
+            elif not failed_dl:
+                outcome['not_available_yet'] += 1
             continue
         try:
             with tempfile.TemporaryDirectory() as tmp:
@@ -235,14 +242,16 @@ def main():
                 else:
                     with open(path, 'wb') as f:
                         f.write(data)
-                active = sum(1 for g in games if g.get('has_playback'))
-                fresh = (rows[0]['started'] >= (now - dt.timedelta(days=a.playback_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
-                         and active < a.max_playbacks)
+                # every recent game gets playback; step 3 then keeps only the newest max_playbacks. (This used to also
+                # require fewer than max_playbacks stored, which locked new games out once the store was full.)
+                fresh = rows[0]['started'] >= (now - dt.timedelta(days=a.playback_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
                 res = parse_replay(path, match_id=mid, keep_playback=fresh)
         except Exception as e:  # noqa: BLE001
             errors.append(f'parse {mid}: {type(e).__name__}: {e}')
+            outcome['unreadable'] += 1
             games.append({**base, 'status': 'Could not read', 'has_playback': 0})
             continue
+        outcome['analyzed'] += 1
         pid_to_player = roster
         names_by_pid = {}
         by_num = {r['number']: r for r in res['players']}
@@ -314,7 +323,10 @@ def main():
     manifest = {
         'upload': written + [p['file'] for p in new_pb],
         'new_playback': new_pb, 'expired_playback': expired,
-        'stats': {'new_history_rows': added, 'replays_tried': tried, 'replays_analyzed': len(new_pb),
+        'stats': {'new_history_rows': added, 'replays_tried': tried, 'replays_analyzed': outcome['analyzed'], 'playbacks_made': len(new_pb),
+                  'replays_not_available_yet': outcome['not_available_yet'], 'replays_missing': outcome['no_replay'],
+                  'replays_unreadable': outcome['unreadable'], 'replay_download_errors': outcome['download_failed'],
+                  'playbacks_stored': sum(1 for g in games if g.get('has_playback')),
                   'history_rows': len(history), 'analysis_rows': len(analysis)},
         'errors': errors[:50],
     }
