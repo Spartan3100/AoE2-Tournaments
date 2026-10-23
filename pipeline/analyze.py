@@ -37,7 +37,67 @@ def _patch_mgz():
 
 
 _patch_mgz()
+
+
+def _patch_ai_skip():
+    """Games with AI players store the AI scripts before the game settings. mgz 1.8.51 skips them by jumping to the
+    end of the first 4096 zero bytes, but newer saves (68+) pad them with a much longer zero run, so it landed inside
+    the padding, read 0 players and failed ("list index out of range"). Same jump first; when what follows isn't a
+    plausible settings block, look at the end of the whole zero run instead."""
+    import re
+    import struct
+    from mgz.fast import header as fh
+    if getattr(fh.parse_metadata, 'aoe2t', False):
+        return
+    meta = struct.Struct('<24xf17xhbxb')
+    speeds = (1.0, 1.5, 1.7, 2.0)
+
+    def plausible(buf, at):
+        if at < 0 or at + meta.size > len(buf):
+            return None
+        speed, owner, n, cheats = meta.unpack_from(buf, at)
+        if any(abs(speed - s) < 1e-3 for s in speeds) and 2 <= n <= 9 and 0 <= owner <= 8 and cheats in (0, 1):
+            return speed, owner, n, cheats
+        return None
+
+    def parse_metadata(header, save, skip_ai=True):
+        start = header.tell()
+        ai = struct.unpack('<I', header.read(4))[0]
+        if ai == 0 or not skip_ai:
+            header.seek(start)
+            return original(header, save, skip_ai)
+        data = header.read()
+        m = re.search(b'\x00' * 4096, data)
+        if not m:
+            raise RuntimeError('could not find ai end')
+        at = m.end()
+        found = plausible(data, at)
+        if not found:
+            end = re.compile(b'\x00+').match(data, m.start()).end()
+            for cand in range(max(m.end(), end - 96), min(len(data) - meta.size, end + 64) + 1):
+                found = plausible(data, cand)
+                if found:
+                    at = cand
+                    break
+        if not found:
+            header.seek(start)
+            return original(header, save, skip_ai)  # fails the way it always did
+        speed, owner, n, cheats = found
+        header.seek(start + 4 + at + meta.size)
+        header.read(60 if save < 61.5 else 24 + n * 4)
+        return dict(speed=speed, owner_id=owner, cheats=cheats == 1), n
+
+    original = fh.parse_metadata
+    parse_metadata.aoe2t = True
+    fh.parse_metadata = parse_metadata
+
+
+_patch_ai_skip()
 from mgz.model import parse_match  # noqa: E402
+
+# Bump when the reader (mgz or the patches here) learns to read more replays: games marked "Could not read" by an
+# older reader are then tried once more (pipeline/run.py).
+READER = 'mgz-1.8.51+1'
 
 # ---------------------------------------------------------------- reference sets
 VILLAGER_ONLY = {'Build', 'Wall', 'Gather', 'Back To Work', 'Reseed', 'Repair'}
