@@ -587,7 +587,7 @@ dash.calc('review_list', {
       const g = games.get(mid) || {};
       const st = String(g.status || '');
       // analysed | waiting (recent, replay not up yet, or not tried yet) | missing (no player's copy on the server) | unreadable
-      const replay = st.startsWith('Analyzed') ? 'analysed' : st === 'No replay' ? 'missing' : st === 'Could not read' ? 'unreadable'
+      const replay = st.startsWith('Analyzed') ? 'analysed' : st === 'No replay' ? 'missing' : st === 'Could not read' ? 'unreadable' : st === 'Custom scenario' ? 'scenario'
         : hs[0].type === 'Other' ? 'missing' : hs[0].started >= week || !st ? 'waiting' : 'missing';
       const scopes = new Set(hs.flatMap((r) => sc.get(r.player + '|' + mid) || []));
       return {

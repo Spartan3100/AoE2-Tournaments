@@ -14,7 +14,7 @@ Network: data.aoe2companion.com (match lists) and aoe.ms (replay files).
 import argparse, datetime as dt, io, json, os, sys, time, urllib.request, urllib.error, zipfile, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from analyze import parse_replay, playback_rows  # noqa: E402
+from analyze import READER, parse_replay, playback_rows  # noqa: E402
 
 API = 'https://data.aoe2companion.com/api/matches?profile_ids={pid}&page={page}'
 REPLAY = 'https://aoe.ms/replay/?gameId={mid}&profileId={pid}'
@@ -46,7 +46,7 @@ AN_COLS = ['match_id', 'number', 'name', 'profile_id', 'civ', 'won', 'map', 'dur
            'market_trades', 'techs', 'unit_data', 'resigned_min', 'player', 'started', 'type', 'opp_civs', 'opp_openings',
            'build_order', 'unit_mix']
 GAME_COLS = ['match_id', 'started', 'type', 'map', 'players_tracked', 'checked_at', 'map_size', 'dimension', 'duration_min',
-             'rated', 'version', 'players', 'status', 'has_playback', 'playback_id', 'replay_profile_id', 'retried']
+             'rated', 'version', 'players', 'status', 'has_playback', 'playback_id', 'replay_profile_id', 'retried', 'reader', 'error']
 
 
 def load(path, default):
@@ -133,6 +133,11 @@ def history_rows(m, roster_by_pid):
     return rows
 
 
+def is_scenario(rows):
+    """A custom scenario game (the match list names its map "... (Scenario)")."""
+    return any('(scenario)' in str(r.get('map', '')).lower() for r in rows)
+
+
 def replay_ids(everyone):
     """Profile IDs of everyone in the match, those the match list says saved a replay first. Each player's game saves
     its own copy, so when one copy is missing on the server another player's usually is not."""
@@ -216,12 +221,18 @@ def main():
             todo[mid] = rows
         elif g.get('status') == 'No replay' and not g.get('retried') and any(r.get('replay_ids') for r in rows):
             todo[mid] = rows  # tried before with only our players' copies: try everyone's once
+        elif g.get('status') == 'Could not read' and g.get('reader') != READER and not is_scenario(rows):
+            todo[mid] = rows  # the reader has improved since: try again
         elif g.get('status') == 'Analyzed, playback expired' and not g.get('retried'):
             again[mid] = rows  # analysed, but its playback was dropped by the old 40-game limit: rebuild it once
     new_pb = []
     tried = 0
     # what happened to each replay this run (printed in the log and kept in data/meta.json)
-    outcome = {'analyzed': 0, 'not_available_yet': 0, 'no_replay': 0, 'unreadable': 0, 'download_failed': 0}
+    outcome = {'analyzed': 0, 'not_available_yet': 0, 'no_replay': 0, 'unreadable': 0, 'scenario': 0, 'download_failed': 0}
+    # games read as "Could not read" before scenarios were recognised are scenarios: say so
+    for g in games:
+        if g.get('status') == 'Could not read' and is_scenario(by_match.get(g['match_id'], [])) :
+            g['status'] = 'Custom scenario'
     order = sorted(todo.items(), key=lambda kv: kv[1][0]['started'], reverse=True) + sorted(again.items(), key=lambda kv: kv[1][0]['started'], reverse=True)
     for mid, rows in order:
         if tried >= a.max_replays:
@@ -293,9 +304,17 @@ def main():
                 fresh = not a.playback_days or rows[0]['started'] >= (now - dt.timedelta(days=a.playback_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
                 res = parse_replay(path, match_id=mid, keep_playback=fresh)
         except Exception as e:  # noqa: BLE001
-            errors.append(f'parse {mid}: {type(e).__name__}: {e}')
-            outcome['unreadable'] += 1
-            games.append({**old, 'retried': 1} if playback_only else {**base, 'status': 'Could not read', 'has_playback': 0})
+            if playback_only:
+                games.append({**old, 'retried': 1})
+            elif is_scenario(rows):
+                # custom scenarios (e.g. CBA) carry extra header data the reader can't follow, and have no standard
+                # openings or age-ups to read anyway: a known answer, not an error
+                outcome['scenario'] += 1
+                games.append({**base, 'status': 'Custom scenario', 'has_playback': 0})
+            else:
+                errors.append(f'parse {mid}: {type(e).__name__}: {e}')
+                outcome['unreadable'] += 1
+                games.append({**base, 'status': 'Could not read', 'has_playback': 0, 'reader': READER, 'error': f'{type(e).__name__}: {e}'[:200]})
             continue
         outcome['analyzed'] += 1
         if old is not None and not playback_only:
@@ -374,7 +393,7 @@ def main():
         'new_playback': new_pb, 'expired_playback': expired,
         'stats': {'new_history_rows': added, 'replays_tried': tried, 'replays_analyzed': outcome['analyzed'], 'playbacks_made': len(new_pb),
                   'replays_not_available_yet': outcome['not_available_yet'], 'replays_missing': outcome['no_replay'],
-                  'replays_unreadable': outcome['unreadable'], 'replay_download_errors': outcome['download_failed'],
+                  'replays_unreadable': outcome['unreadable'], 'custom_scenarios': outcome['scenario'], 'replay_download_errors': outcome['download_failed'],
                   'playbacks_stored': sum(1 for g in games if g.get('has_playback')),
                   'history_rows': len(history), 'analysis_rows': len(analysis)},
         'errors': errors[:50],
