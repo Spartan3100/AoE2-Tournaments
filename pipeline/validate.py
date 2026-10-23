@@ -170,7 +170,7 @@ def main():
         st = str(by_id.get(mid, {}).get('status', 'Not tried yet'))
         st = 'Analyzed' if st.startswith('Analyzed') else st
         state[st] += 1
-        if st not in ('Analyzed', 'No replay') and len(open_) < 8:
+        if st not in ('Analyzed', 'No replay', 'Custom scenario') and len(open_) < 8:
             open_.append(f"{r['started'][:10]} {r.get('map', '')} ({r['player']} vs {r.get('opp_name') or r.get('opp_civs') or '?'}): {st}")
     if want:
         # "No replay" is a known answer (no player's copy is on Microsoft's server); the rest still need work
@@ -178,7 +178,7 @@ def main():
         add('Every game is analysed or has no replay', 'Accuracy', 'fail' if bad > max(2, len(want) // 20) else 'warn' if todo or bad else 'pass',
             f"{state['Analyzed']} of {len(want)} analysed" + ''.join(f', {n} {k.lower()}' for k, n in state.items() if k != 'Analyzed'),
             ('Still open: ' + '; '.join(open_) + '. Older games are worked through 60 per update, newest first.' if open_ else
-             '"No replay" means no player\'s copy of that game is on Microsoft\'s server (it keeps replays for a limited time). Analysis already made is kept for good.'))
+             '"No replay" means no player\'s copy of that game is on Microsoft\'s server (it keeps replays for a limited time); custom scenarios have no standard play to analyse. Analysis already made is kept for good.'))
 
     with open(a.out, 'w') as f:
         json.dump(rows, f, indent=1)

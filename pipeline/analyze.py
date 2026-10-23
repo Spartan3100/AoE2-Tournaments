@@ -39,6 +39,11 @@ def _patch_mgz():
 _patch_mgz()
 from mgz.model import parse_match  # noqa: E402
 
+# Bump when the reader (mgz or the patches here) learns to read more replays: games marked "Could not read" by an
+# older reader are then tried once more (pipeline/run.py). Known unreadable on 1.8.51: games with AI players on save
+# 68+ (the AI scripts are laid out differently, so the header's player list is not found).
+READER = 'mgz-1.8.51+1'
+
 # ---------------------------------------------------------------- reference sets
 VILLAGER_ONLY = {'Build', 'Wall', 'Gather', 'Back To Work', 'Reseed', 'Repair'}
 MILITARY_CMDS = {'Move', 'Order', 'Patrol', 'Formation', 'Follow', 'Attack Ground', 'Guard', 'Stance', 'Target'}
