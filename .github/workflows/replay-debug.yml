@@ -1,0 +1,34 @@
+# TEMPORARY (branch only, never merged): diagnose replays the update job could not read.
+name: Replay debug
+on:
+  push:
+    branches: ['claude/**']
+    paths: ['pipeline/debug_replays.py', 'pipeline/analyze.py', '.github/workflows/replay-debug.yml']
+permissions:
+  contents: read
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r pipeline/requirements.txt
+      - name: Get the latest data
+        run: |
+          git fetch --depth 1 origin data
+          mkdir data_enc data
+          git archive FETCH_HEAD | tar -x -C data_enc
+          python pipeline/crypt.py decrypt data_enc data
+      - run: python pipeline/debug_replays.py data replays_debug
+      # the replay files only (game recordings, public on Microsoft's server anyway); kept for 1 day
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unreadable-replays
+          path: replays_debug/*.aoe2record
+          retention-days: 1
+          if-no-files-found: ignore
