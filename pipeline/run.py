@@ -104,13 +104,31 @@ def rating_gaps(history, no_result):
             chains.setdefault((r['player'], r['ladder']), []).append(r)
     for (player, ladder), rows in chains.items():
         rows.sort(key=lambda r: r['started'])
-        for a, b in zip(rows, rows[1:]):
+        jumps = []  # (index of the game before the jump, rating after it, jump)
+        for i, (a, b) in enumerate(zip(rows, rows[1:])):
             if a.get('rating_diff') is None and a.get('won') is not None:
                 continue
             after = int(a['rating']) + int(a.get('rating_diff') or 0)
-            jump = int(b['rating']) - after
-            if not jump:
-                continue
+            if int(b['rating']) != after:
+                jumps.append((i, after, int(b['rating']) - after))
+        # a jump undone over the next game or few (+23 then -23) is one game listed with the wrong rating, not
+        # missing games: seen in team games on 2026-10-24, where it was 10 of 13 jumps
+        keep, k = [], 0
+        while k < len(jumps):
+            end = None
+            for j in range(k, min(k + 3, len(jumps))):
+                if jumps[j][0] - jumps[k][0] != j - k:
+                    break  # only jumps between back-to-back games
+                if j > k and sum(x[2] for x in jumps[k:j + 1]) == 0:
+                    end = j
+                    break
+            if end is None:
+                keep.append(jumps[k])
+                k += 1
+            else:
+                k = end + 1
+        for i, after, jump in keep:
+            a, b = rows[i], rows[i + 1]
             end = dt.datetime.fromisoformat(a['started'].replace('Z', '+00:00')) + dt.timedelta(minutes=float(a.get('duration_min') or 0))
             one = abs(jump) <= MAX_ONE_GAME
             out.append({
