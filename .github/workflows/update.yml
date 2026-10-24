@@ -125,3 +125,5 @@ jobs:
       # only now, with the changes committed and published, take them out of the site's pending list
       - name: Clear saved organizer changes
         run: node pipeline/apply_admin_changes.js --clear
+      - name: Record what happened to replays added on the site
+        run: python pipeline/uploads.py mark
