@@ -232,7 +232,8 @@ html.tt-locked #dash-root { display: none; }
 /* Games: add your own replay of a game Microsoft has no replay or record of */
 .tt .tt-add { margin-top: var(--cds-gap-md); padding: var(--cds-pad-sm) var(--cds-pad-md); border: 1px dashed var(--color-border-line); border-radius: var(--cds-radius); }
 .tt .tt-add h4 { margin: 0 0 var(--cds-pad-xs); }
-.tt .tt-add-form { grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); margin: var(--cds-pad-xs) 0; }
+.tt .tt-add-form { display: flex; flex-wrap: wrap; gap: var(--cds-pad-sm); align-items: center; margin: var(--cds-pad-xs) 0; }
+.tt .tt-add-form .tt-input { width: auto; flex: 1 1 14rem; }
 .tt .tt-add-list { margin: var(--cds-pad-xs) 0 0; padding-left: 1.2em; }
 .tt .tt-add-list li { margin: 2px 0; }
 .tt .tt-btn.tt-small { padding: 0 var(--cds-pad-sm); font-size: 0.85em; }

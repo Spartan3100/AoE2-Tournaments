@@ -15,6 +15,9 @@ os.makedirs(inp + '/uploads', exist_ok=True); os.makedirs(out, exist_ok=True)
 shutil.copy('config/players.json', inp)
 # pretend the source game is missing from the history (a gap between the games either side)
 rest = [r for r in hist if not (r['match_id'] == src['match_id'])]
+for r in rest:
+    if r['player'] == p['player'] and r['match_id'] in {x['match_id'] for x in mine}:
+        r['ladder'] = 'rm_1v1'  # the data branch predates the ladder field
 json.dump(rest, open(inp + '/history.json', 'w'))
 for n in ('replay_analysis', 'replay_games', 'unrecorded', 'backfill'):
     shutil.copy(os.path.join(D, n + '.json'), inp + f'/{n}.json') if os.path.exists(os.path.join(D, n + '.json')) else json.dump([] if n != 'backfill' else {}, open(inp + f'/{n}.json', 'w'))
@@ -25,7 +28,8 @@ gap = {'started': mine[-2]['started'], 'before': '2099-01-01T00:00:00Z', 'type':
 wrong = {**gap, 'started': '2020-01-01T00:00:00Z', 'before': '2020-01-02T00:00:00Z'}
 ups = [{'id': 1, 'match_id': 'gap-x-y', 'player': p['player'], 'game': gap, 'file': f'{inp}/uploads/1.bin'},
        {'id': 2, 'match_id': 'gap-a-b', 'player': p['player'], 'game': wrong, 'file': f'{inp}/uploads/2.bin'},
-       {'id': 3, 'match_id': 'gap-c-d', 'player': players[0]['player'], 'game': gap, 'file': f'{inp}/uploads/1.bin'}]
+       {'id': 3, 'match_id': 'gap-c-d', 'player': players[0]['player'], 'game': gap, 'file': f'{inp}/uploads/1.bin'},
+       {'id': 4, 'match_id': 'gap-other-id', 'player': p['player'], 'game': gap, 'file': f'{inp}/uploads/1.bin'}]
 json.dump(ups, open(inp + '/uploads.json', 'w'))
 r = subprocess.run([sys.executable, 'pipeline/run.py', '--in', inp, '--out', out, '--max-replays', '1', '--backfill-pages', '0'], capture_output=True, text=True)
 print('run.py exit', r.returncode, r.stderr[-1500:])
@@ -36,4 +40,5 @@ print('new row', row and {k: row[k] for k in ('match_id', 'started', 'type', 'wo
 g = next((x for x in json.load(open(out + '/replay_games.json')) if x['match_id'] == 'up_1'), None)
 print('replay_games', g and {k: g.get(k) for k in ('status', 'has_playback', 'uploaded', 'started_at', 'speed', 'duration_min')})
 an = [x for x in json.load(open(out + '/replay_analysis.json')) if x['match_id'] == 'up_1']
+print('up_ rows', sorted(x['match_id'] for x in h if x['match_id'].startswith('up_')), 'gaps left near', [g['match_id'] for g in json.load(open(out + '/unrecorded.json')) if g.get('kind') == 'not_in_records' and g['player'] == p['player'] and g['started'] >= mine[0]['started']])
 print('analysis rows', len(an), 'pb file', os.path.exists(out + '/pb_up_1.json'))

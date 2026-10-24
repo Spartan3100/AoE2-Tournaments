@@ -153,7 +153,7 @@ def read_replay(data, mid, playback=False):
         return parse_replay(path, match_id=mid, keep_playback=playback)
 
 
-def check_upload(u, res, history, roster):
+def check_upload(u, res, history, roster, gaps):
     """Is this uploaded replay the game it was added to? Returns (match_id, new history row or None) or raises
     ValueError with a reason the site shows."""
     pid = next((k for k, v in roster.items() if v == u['player']), None)
@@ -171,10 +171,13 @@ def check_upload(u, res, history, roster):
         if not near(lo.isoformat(), hi.isoformat()):
             raise ValueError(f"This replay is from {when[:16].replace('T', ' ') or 'an unknown time'} UTC, not this game ({rows[0]['started'][:16].replace('T', ' ')} UTC)")
         return u['match_id'], None
-    # a game missing from Microsoft's history: it must be played between the games either side of the rating jump
-    g = u.get('game') or {}
-    if not g.get('started') or not g.get('before'):
-        raise ValueError('Not enough is known about that game to check this replay')
+    # a game missing from Microsoft's history: one this job found (the site's copy of its details is not trusted), by
+    # id, or, as an id names the games either side and can change when another game turns up, by when it was played
+    mine = [r for r in gaps if r['player'] == u['player']]
+    g = next((r for r in mine if r['match_id'] == u['match_id']), None) or next(
+        (r for r in mine if when and ts(r['started']) - dt.timedelta(minutes=45) <= ts(when) <= ts(r['before']) + dt.timedelta(minutes=5)), None)
+    if g is None:
+        raise ValueError('That game is no longer missing (it may have turned up, or a replay was already added for it)')
     if not near((ts(g['started']) - dt.timedelta(minutes=45)).isoformat(), (ts(g['before']) + dt.timedelta(minutes=5)).isoformat()):
         raise ValueError(f"This replay is from {when[:16].replace('T', ' ') or 'an unknown time'} UTC; the missing game was between "
                          f"{g['started'][:16].replace('T', ' ')} and {g['before'][:16].replace('T', ' ')} UTC")
@@ -368,6 +371,7 @@ def main():
             time.sleep(1.5)
     # 1c. replays members added on the site (pipeline/uploads.py): checked against the game they were added to
     uploaded, upload_results = {}, []
+    gaps = rating_gaps(history, list(no_result.values()))
     for u in load(os.path.join(a.inp, 'uploads.json'), []):
         try:
             with open(u['file'], 'rb') as f:
@@ -378,12 +382,13 @@ def main():
                 res = read_replay(data, '')
             except Exception as e:  # noqa: BLE001
                 raise ValueError(f"Couldn't read this file as an AoE2 replay ({type(e).__name__})") from e
-            mid, row = check_upload(u, res, history, roster)
+            mid, row = check_upload(u, res, history, roster, gaps)
             if row is not None and (row['player'], mid) not in known:
                 known.add((row['player'], mid))
                 by_key[(row['player'], mid)] = row
                 history.append(row)
                 added += 1
+                gaps = rating_gaps(history, list(no_result.values()))  # that gap is filled now
             uploaded[mid] = data
             upload_results.append({'id': u['id'], 'status': 'done', 'message': ''})
         except Exception as e:  # noqa: BLE001
