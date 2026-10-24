@@ -90,6 +90,8 @@ def game_type(m, n_players):
 
 BACKFILL_V = 2
 MAX_ONE_GAME = 32  # the most one ranked game moves a rating (Elo, K = 32)
+MAX_JUMP = 150  # beyond this a jump is a ladder reset, not games (seen 2021-2022: up to 424 in one step)
+MIN_ROOM = 5  # minutes between two listed games for one more to fit (2022 data has +10 jumps 1-4 minutes apart)
 
 
 def rating_gaps(history, no_result):
@@ -100,7 +102,8 @@ def rating_gaps(history, no_result):
     out = []
     chains = {}
     for r in list(history) + list(no_result):
-        if r.get('ladder') and r.get('rating') is not None and 'ranked' in str(r.get('type', '')):
+        # ranked, quick play and Empire Wars ladders; an unranked rating doesn't carry from game to game
+        if r.get('ladder') and 'unranked' not in r['ladder'] and r.get('rating') is not None:
             chains.setdefault((r['player'], r['ladder']), []).append(r)
     for (player, ladder), rows in chains.items():
         rows.sort(key=lambda r: r['started'])
@@ -111,6 +114,8 @@ def rating_gaps(history, no_result):
             after = int(a['rating']) + int(a.get('rating_diff') or 0)
             if int(b['rating']) != after:
                 jumps.append((i, after, int(b['rating']) - after))
+        end_of = lambda r: dt.datetime.fromisoformat(r['started'].replace('Z', '+00:00')) + dt.timedelta(minutes=float(r.get('duration_min') or 0))
+        room = lambda i: (dt.datetime.fromisoformat(rows[i + 1]['started'].replace('Z', '+00:00')) - end_of(rows[i])).total_seconds() / 60
         # a jump undone over the next game or few (+23 then -23) is one game listed with the wrong rating, not
         # missing games: seen in team games on 2026-10-24, where it was 10 of 13 jumps
         keep, k = [], 0
@@ -128,8 +133,10 @@ def rating_gaps(history, no_result):
             else:
                 k = end + 1
         for i, after, jump in keep:
+            if abs(jump) > MAX_JUMP or room(i) < MIN_ROOM:
+                continue
             a, b = rows[i], rows[i + 1]
-            end = dt.datetime.fromisoformat(a['started'].replace('Z', '+00:00')) + dt.timedelta(minutes=float(a.get('duration_min') or 0))
+            end = end_of(a)
             one = abs(jump) <= MAX_ONE_GAME
             out.append({
                 'player': player, 'match_id': f"gap-{a['match_id']}-{b['match_id']}", 'kind': 'not_in_records',
