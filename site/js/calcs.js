@@ -186,23 +186,23 @@ dash.calc('h_scoped', {
   description: 'Each history game tagged with the views it counts in: All games, its type (Ranked 1v1, Ranked team, Unranked & other), and Tournament when it is a tournament game; each view also gets a “ · Last year” and “ · Last 6 months” copy when the game is that recent (counted back from today).',
   fn: (history, matches) => {
     const tour = new Set(matches.filter((m) => m.match_id).map((m) => String(m.match_id)));
-    const kind = (t) => (t === '1v1 ranked' ? 'Ranked 1v1' : t === 'Team ranked' ? 'Ranked team' : 'Unranked & other');
-    const periods = [['Last year', 365], ['Last 6 months', 183]];
-    const now = Date.now();
-    return history.map((r) => {
-      const base = ['All games', kind(r.type)].concat(tour.has(String(r.match_id)) ? ['Tournament'] : []);
-      const age = (now - Date.parse(r.started)) / 864e5;
-      const tags = base.concat(...periods.filter(([, d]) => age <= d).map(([p]) => base.map((s) => s + ' · ' + p)));
-      return { player: r.player, match_id: String(r.match_id), type: r.type, scopes: tags.join('|') };
-    });
+    return history.map((r) => ({ player: r.player, match_id: String(r.match_id), type: r.type, scopes: viewsOf(r, tour).join('|') }));
   },
 });
 
+// the views a game counts in (see h_scoped)
+function viewsOf(r, tour) {
+  const kind = (t) => (t === '1v1 ranked' ? 'Ranked 1v1' : t === 'Team ranked' ? 'Ranked team' : 'Unranked & other');
+  const base = ['All games', kind(r.type)].concat(tour && tour.has(String(r.match_id)) ? ['Tournament'] : []);
+  const age = (Date.now() - Date.parse(r.started)) / 864e5;
+  return base.concat(...[['Last year', 365], ['Last 6 months', 183]].filter(([, d]) => age <= d).map(([p]) => base.map((s) => s + ' · ' + p)));
+}
+
 dash.calc('p_summary', {
-  inputs: ['history', 'h_scoped', 'replay_analysis'],
+  inputs: ['history', 'h_scoped', 'replay_analysis', 'unrecorded'],
   title: 'Player headline stats',
-  description: 'Per player and view: games, win rate, latest and peak rating, average real-time length, best and current win streak, and average eAPM from analyzed replays.',
-  fn: (history, h_scoped, replay_analysis) => {
+  description: 'Per player and view: games (including games with no result and games Microsoft left out of its match history: “unknown”), win rate (games with a result only), latest and peak rating, average real-time length, best and current win streak, and average eAPM from analyzed replays.',
+  fn: (history, h_scoped, replay_analysis, unrecorded) => {
     const sc = new Map(h_scoped.map((r) => [r.player + '|' + r.match_id, r.scopes.split('|')]));
     const out = [];
     [...new Set(history.map((r) => r.player))].forEach((player) => {
@@ -220,10 +220,11 @@ dash.calc('p_summary', {
         g.forEach((r) => { run = Number(r.won) === 1 ? run + 1 : 0; best = Math.max(best, run); });
         let now = 0; const last = g.length ? Number(g[g.length - 1].won) : 0;
         for (let i = g.length - 1; i >= 0 && Number(g[i].won) === last; i -= 1) now += 1;
+        const unknown = unrecorded.filter((r) => r.player === player && viewsOf(r).includes(scope)).reduce((s, r) => s + (Number(r.games) || 1), 0);
         const ids = new Set(g.map((r) => String(r.match_id)));
         const an = replay_analysis.filter((a) => a.player === player && ids.has(String(a.match_id)) && a.eapm != null);
         out.push({
-          player, scope, games: g.length, wins, win_rate: wins / g.length,
+          player, scope, games: g.length + unknown, unknown, wins, win_rate: wins / g.length,
           rating_type: ratedType === '1v1 ranked' ? '1v1' : 'team',
           rating_now: rated.length ? Number(rated[rated.length - 1].rating) : null,
           rating_peak: rated.length ? Math.max(...rated.map((r) => Number(r.rating))) : null,
@@ -575,9 +576,9 @@ dash.calc('s_units', {
 });
 
 dash.calc('review_list', {
-  inputs: ['replay_games', 'history', 'h_scoped'], title: 'Games',
-  description: 'Every game of the tracked players, newest first: the result for each player (from the match list), and whether its replay was found and analysed. A game without a replay still shows, with its strategy details unknown.',
-  fn: (replay_games, history, h_scoped) => {
+  inputs: ['replay_games', 'history', 'h_scoped', 'unrecorded'], title: 'Games',
+  description: 'Every game of the tracked players, newest first: the result for each player (from the match list), and whether its replay was found and analysed. A game without a replay still shows, with its strategy details unknown. So do games with no result (a disconnect) and games Microsoft counted on the ladder but left out of its match history (found from a jump in rating between two listed games), marked as such.',
+  fn: (replay_games, history, h_scoped, unrecorded) => {
     const sc = new Map(h_scoped.map((r) => [r.player + '|' + r.match_id, r.scopes.split('|')]));
     const games = new Map(replay_games.map((g) => [String(g.match_id), g]));
     const byMatch = new Map();
@@ -597,9 +598,27 @@ dash.calc('review_list', {
         tournament: scopes.has('Tournament') ? 1 : 0, replay,
         views: [...scopes].join('|'), has_playback: Number(g.has_playback) === 1 ? 1 : 0, playback_id: g.playback_id || '',
       };
-    }).sort((a, b) => (a.started < b.started ? 1 : -1));
+    }).concat(unknownGames(unrecorded)).sort((a, b) => (a.started < b.started ? 1 : -1));
   },
 });
+
+// review_list rows for games without a result and games missing from Microsoft's match history
+function unknownGames(unrecorded) {
+  const byMatch = new Map();
+  unrecorded.forEach((r) => { const k = String(r.match_id); if (!byMatch.has(k)) byMatch.set(k, []); byMatch.get(k).push(r); });
+  const signed = (n) => (n > 0 ? '+' : '') + n;
+  return [...byMatch.entries()].map(([mid, rs]) => {
+    const r = rs[0], gap = r.kind === 'not_in_records';
+    const result = rs.map((x) => (gap
+      ? `${x.player}: rating ${signed(Number(x.rating_diff))}, ${Number(x.games) > 1 ? `at least ${x.games} games` : `likely a ${Number(x.rating_diff) > 0 ? 'win' : 'loss'}`}`
+      : `${x.player}: no result${x.civ ? ` as ${x.civ}` : ''}`)).join('; ');
+    return {
+      match_id: mid, started: r.started, type: r.type, map: gap ? 'Unknown map' : r.map, duration_min: gap ? null : r.duration_min,
+      players: rs.map((x) => x.player).join(', '), result, tournament: 0, replay: gap ? 'norecord' : 'noresult',
+      views: viewsOf(r).join('|'), has_playback: 0, playback_id: '', before: r.before || '',
+    };
+  });
+}
 
 // ---------------------------------------------------------------- tournament game detection
 dash.calc('t_suggest', {

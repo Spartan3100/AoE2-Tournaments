@@ -257,6 +257,12 @@
       n.replaceChildren();
       if (row && row[k] != null) n.append(label, mark('p_summary', where, k, k === 'streak_now' ? row[k] : num(row[k])));
     };
+    const gu = document.querySelector('#pp-kpis [data-k2="unknown"]');
+    gu.replaceChildren();
+    if (row && row.unknown) {
+      gu.append('Incl. ', mark('p_summary', where, 'unknown', num(row.unknown)), ' with unknown result');
+      gu.title = 'Games with no result (a disconnect) or that Microsoft left out of its match history. They are not in the win rate. Games lists them.';
+    }
     sub('rating_peak', 'Peak ');
     sub('streak_now', 'Current ');
     const ek = document.querySelector('#pp-kpis [data-k3="eapm"]');
@@ -460,12 +466,14 @@
     return out;
   };
 
-  const REPLAY_LABEL = { analysed: 'Analysed', waiting: '⚠ Waiting for replay', missing: '⚠ No replay', unreadable: '⚠ Couldn’t read', scenario: 'Custom scenario' };
+  const REPLAY_LABEL = { analysed: 'Analysed', waiting: '⚠ Waiting for replay', missing: '⚠ No replay', unreadable: '⚠ Couldn’t read', scenario: 'Custom scenario', noresult: '⚠ No result', norecord: '⚠ Not in Microsoft’s records' };
   const REPLAY_WHY = {
     waiting: 'the replay isn’t on Microsoft’s server yet (it’s tried again every update for 3 days), so the openings, age-up times, army and build orders are unknown for now. The result and civs above are from the match list.',
     missing: 'no player’s copy of the replay is on Microsoft’s server, so the openings, age-up times, army and build orders are unknown. The result and civs above are from the match list.',
     unreadable: 'the replay downloaded but couldn’t be read (usually a game update the replay reader doesn’t support yet), so the strategy details are unknown. It’s tried again whenever the reader is improved. The result and civs above are from the match list.',
     scenario: 'this was a custom scenario, which has no standard openings or age-ups to analyse. The result and civs above are from the match list.',
+    noresult: 'Microsoft recorded this game without a result (usually a disconnect), so it counts as a game played but not as a win or a loss.',
+    norecord: 'Microsoft counted this on the ladder but left it out of its match history, so no site can list it. It was found from a jump in rating between the games before and after it, so its time is approximate, it may be more than one game, and its map, civs and replay are unknown. It counts as a game played but not in win rates.',
   };
   function drawReview(names) {
     if (document.activeElement !== rvPlayer) {
@@ -486,7 +494,7 @@
         { field: 'type', label: 'Type', fmt: (v, r) => (r.tournament ? `Tournament · ${v}` : v) },
         { field: 'map', label: 'Map' },
         { field: 'result', label: 'Result', wrap: true },
-        { field: 'duration_min', label: 'Min', num: true, fmt: (v) => d3.format('.0f')(v) },
+        { field: 'duration_min', label: 'Min', num: true, fmt: (v) => (v == null ? '—' : d3.format('.0f')(v)) },
         { field: 'replay', label: 'Replay', fmt: (v) => REPLAY_LABEL[v] || v, cls: (v) => (v === 'analysed' || v === 'scenario' ? '' : 'warn') },
         { field: 'has_playback', label: 'Playback', fmt: (v, r) => (Number(v) === 1 ? 'Yes' : r.replay === 'analysed' ? 'Not yet' : '—') },
       ], 'match_id', {
@@ -521,7 +529,7 @@
       title.replaceChildren(g ? mark('review_list', { match_id: mid }, 'map', g.map, 'span') : document.createTextNode('Game'),
         document.createTextNode(g ? ` · ${d3.utcFormat('%b %-d, %Y')(new Date(g.started))}` : ''));
       note.replaceChildren();
-      if (g) note.append(mark('review_list', { match_id: mid }, 'result', g.result, 'span'), ` · ${d3.format('.0f')(g.duration_min)} min · ${g.tournament ? 'Tournament game · ' : ''}${g.type}`);
+      if (g) note.append(mark('review_list', { match_id: mid }, 'result', g.result, 'span'), `${g.duration_min == null ? '' : ` · ${d3.format('.0f')(g.duration_min)} min`} · ${g.tournament ? 'Tournament game · ' : ''}${g.type}`);
       else note.textContent = 'This game isn’t in the match list.';
       if (g && g.replay === 'scenario') note.append(` · Not analysed: ${REPLAY_WHY.scenario}`);
       else if (g && g.replay !== 'analysed') note.append(mk('span', 'tt-warn', ` · ⚠ ${REPLAY_WHY[g.replay]}`));
@@ -545,7 +553,7 @@
     const pbId = isSample ? 'pb_sample' : g && g.has_playback ? g.playback_id : '';
     if (!pbId) {
       vbox.removeAttribute('data-source');
-      vbox.replaceChildren(empty(!g ? 'Pick a game above.' : g.replay === 'scenario' ? 'No map playback for custom scenarios.' : g.replay !== 'analysed' ? 'No map playback for this game: its replay isn’t available (see the note above).' : 'This game’s map playback hasn’t been rebuilt yet (older games are redone a few at a time with each update). The analysis below is complete.'));
+      vbox.replaceChildren(empty(!g ? 'Pick a game above.' : g.replay === 'noresult' || g.replay === 'norecord' ? 'No map playback for this game (see the note above).' : g.replay === 'scenario' ? 'No map playback for custom scenarios.' : g.replay !== 'analysed' ? 'No map playback for this game: its replay isn’t available (see the note above).' : 'This game’s map playback hasn’t been rebuilt yet (older games are redone a few at a time with each update). The analysis below is complete.'));
     } else {
       vbox.dataset.source = pbId;
       window.TT_viewer(vbox, pbId, (n) => (pidOf.size ? steamOr(n) : n));

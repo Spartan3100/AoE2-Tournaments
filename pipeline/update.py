@@ -4,6 +4,7 @@
 
 Reads config/ (edited by the organizers) and data/ (written by this script), then:
   1. adds new online games for every player to data/history.json (all time, never trimmed)
+     and to data/unrecorded.json the games that have no result or that Microsoft left out of its match history
   2. downloads and reads new replays: data/replay_analysis.json, data/replay_games.json, data/playback/pb_<id>.json
   3. re-checks the data against AoE2 Companion: data/data_check.json
   4. writes data/meta.json with the time of this update
@@ -52,7 +53,7 @@ def main():
 
     # 1-2. games and replays (pipeline/run.py does the work, as it did for the claude.ai dashboard)
     shutil.copy(os.path.join(CFG, 'players.json'), inp)
-    for n in ('history', 'replay_analysis', 'replay_games'):
+    for n in ('history', 'replay_analysis', 'replay_games', 'unrecorded'):
         wj(os.path.join(inp, n + '.json'), rj(os.path.join(DATA, n + '.json'), []))
     wj(os.path.join(inp, 'backfill.json'), rj(os.path.join(DATA, 'backfill.json'), {}))  # how far each player's history is fetched
     before = len(rj(os.path.join(DATA, 'history.json'), []))
@@ -66,7 +67,7 @@ def main():
         if len(hist) < before:
             raise SystemExit(f'history shrank from {before} to {len(hist)} rows; not saving')
         wj(os.path.join(DATA, 'history.json'), hist)
-        for n in ('replay_analysis', 'replay_games'):
+        for n in ('replay_analysis', 'replay_games', 'unrecorded'):
             src = os.path.join(out, n + '.json')
             wj(os.path.join(DATA, n + '.json'), rj(src, []) if os.path.exists(src) else [])
         wj(os.path.join(DATA, 'backfill.json'), rj(os.path.join(out, 'backfill.json'), {}))
@@ -78,6 +79,8 @@ def main():
             if f.startswith('pb_') and f != 'pb_sample.json' and f not in keep:
                 os.remove(os.path.join(PB, f))
 
+    if not os.path.exists(os.path.join(DATA, 'unrecorded.json')):
+        wj(os.path.join(DATA, 'unrecorded.json'), [])  # the site reads it on every page
     errors = list(manifest.get('errors') or [])
 
     # 3. accuracy check
@@ -89,7 +92,7 @@ def main():
             docs.append({'id': f[:-5], 'data': {}})
     chk = os.path.join(work, 'check')
     os.makedirs(chk)
-    for n in ('history', 'replay_analysis', 'replay_games'):
+    for n in ('history', 'replay_analysis', 'replay_games', 'unrecorded'):
         shutil.copy(os.path.join(DATA, n + '.json'), chk)
     shutil.copy(os.path.join(CFG, 'players.json'), chk)
     wj(os.path.join(work, 'datasets.json'), docs)

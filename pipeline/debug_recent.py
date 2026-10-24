@@ -25,3 +25,4 @@ for name in roster.values():
     print(f'player #{num[name]}: {n} games, {sum(1 for r in nores.values() if r["player"] == name)} without result, {len(mine)} gaps')
     for g in mine:
         print('  ', g['match_id'], g['started'], g['ladder'], 'jump', g['rating_diff'], 'won', g['won'], 'games', g['games'])
+# run 2
