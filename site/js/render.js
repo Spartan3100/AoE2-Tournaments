@@ -257,6 +257,12 @@
       n.replaceChildren();
       if (row && row[k] != null) n.append(label, mark('p_summary', where, k, k === 'streak_now' ? row[k] : num(row[k])));
     };
+    const gu = document.querySelector('#pp-kpis [data-k2="unknown"]');
+    gu.replaceChildren();
+    if (row && row.unknown) {
+      gu.append('Incl. ', mark('p_summary', where, 'unknown', num(row.unknown)), ' with unknown result');
+      gu.title = 'Games with no result (a disconnect) or that Microsoft left out of its match history. They are not in the win rate. Games lists them.';
+    }
     sub('rating_peak', 'Peak ');
     sub('streak_now', 'Current ');
     const ek = document.querySelector('#pp-kpis [data-k3="eapm"]');
@@ -460,13 +466,65 @@
     return out;
   };
 
-  const REPLAY_LABEL = { analysed: 'Analysed', waiting: '⚠ Waiting for replay', missing: '⚠ No replay', unreadable: '⚠ Couldn’t read', scenario: 'Custom scenario' };
+  const REPLAY_LABEL = { analysed: 'Analysed', waiting: '⚠ Waiting for replay', missing: '⚠ No replay', unreadable: '⚠ Couldn’t read', scenario: 'Custom scenario', noresult: '⚠ No result', norecord: '⚠ Not in Microsoft’s records' };
   const REPLAY_WHY = {
     waiting: 'the replay isn’t on Microsoft’s server yet (it’s tried again every update for 3 days), so the openings, age-up times, army and build orders are unknown for now. The result and civs above are from the match list.',
     missing: 'no player’s copy of the replay is on Microsoft’s server, so the openings, age-up times, army and build orders are unknown. The result and civs above are from the match list.',
     unreadable: 'the replay downloaded but couldn’t be read (usually a game update the replay reader doesn’t support yet), so the strategy details are unknown. It’s tried again whenever the reader is improved. The result and civs above are from the match list.',
     scenario: 'this was a custom scenario, which has no standard openings or age-ups to analyse. The result and civs above are from the match list.',
+    noresult: 'Microsoft recorded this game without a result (usually a disconnect), so it counts as a game played but not as a win or a loss.',
+    norecord: 'Microsoft counted this on the ladder but left it out of its match history, so no site can list it. It was found from a jump in rating between the games before and after it, so its time is approximate, it may be more than one game, and its map, civs and replay are unknown. It counts as a game played but not in win rates.',
   };
+  // "Add your replay": for a game with no replay on Microsoft's server, or missing from its match history. The next
+  // update checks it is this game (pipeline/run.py check_upload) and reads it like a downloaded replay.
+  let addFor = '';
+  function drawAdd(g) {
+    const box = el('rv-add'), up = window.TT_UPLOAD;
+    if (!g || !up || !['missing', 'norecord'].includes(g.replay)) { box.hidden = true; box.replaceChildren(); addFor = ''; return; }
+    if (addFor === g.match_id) return; // a redraw keeps the chosen file
+    addFor = g.match_id;
+    box.hidden = false;
+    const players = g.players.split(', ');
+    const list = mk('ul', 'tt-add-list');
+    const msg = mk('p', 'tt-note');
+    const refresh = () => up.list(g.match_id).then((rows) => {
+      list.replaceChildren(...rows.map((r) => {
+        const li = mk('li', r.status === 'rejected' ? 'tt-warn' : '',
+          `${r.player}: ${r.status === 'waiting' ? 'added, read at the next update (every 30 minutes)' : r.status === 'done' ? 'read' : `not used: ${r.message}`}`);
+        if (r.mine && r.status !== 'done') {
+          const b = mk('button', 'tt-btn tt-small', r.status === 'waiting' ? 'Take back' : 'Remove'); b.type = 'button';
+          b.addEventListener('click', () => up.cancel(r).then(refresh, (e) => { msg.textContent = `Couldn’t remove it: ${e.message}`; }));
+          li.append(' ', b);
+        }
+        return li;
+      }));
+    }, () => list.replaceChildren());
+    box.replaceChildren(mk('h4', '', 'Have the replay?'),
+      mk('p', 'tt-note', `${g.replay === 'norecord' ? 'Microsoft has no record of this game, but your own copy of the replay has everything: map, civs, result and the full analysis.' : 'Microsoft’s server has no copy of this replay, but yours can be read instead.'} AoE2 saves replays as .aoe2record files in Games\\Age of Empires 2 DE\\<your id>\\savegame in your user folder. The next update checks it is this game, then reads it.`));
+    if (!up.can()) {
+      box.append(mk('p', 'tt-note', 'Players and organizers can add one.'));
+    } else {
+      const form = mk('div', 'tt-form tt-add-form');
+      const who = mk('select', 'tt-input');
+      players.forEach((p) => who.append(new Option(steamOr(p), p)));
+      const file = mk('input', 'tt-input'); file.type = 'file'; file.accept = '.aoe2record,.zip';
+      const send = mk('button', 'tt-btn', 'Add replay'); send.type = 'button';
+      send.addEventListener('click', () => {
+        const f = file.files && file.files[0];
+        if (!f) { msg.textContent = 'Choose the replay file first.'; return; }
+        send.disabled = true; msg.textContent = 'Adding…';
+        up.send(f, { match_id: g.match_id, player: who.value, game: g.info || {} })
+          .then(() => { msg.textContent = 'Added. It’s read at the next update (every 30 minutes).'; file.value = ''; refresh(); },
+            (e) => { msg.textContent = `Couldn’t add it: ${e.message}`; })
+          .finally(() => { send.disabled = false; });
+      });
+      if (players.length > 1) form.append(mk('label', 'tt-label', 'Whose replay'), who);
+      form.append(file, send);
+      box.append(form);
+    }
+    box.append(msg, list);
+    refresh();
+  }
   function drawReview(names) {
     if (document.activeElement !== rvPlayer) {
       rvPlayer.replaceChildren(new Option('All players', ''), ...names.map((n) => new Option(steamOr(n), n)));
@@ -486,7 +544,7 @@
         { field: 'type', label: 'Type', fmt: (v, r) => (r.tournament ? `Tournament · ${v}` : v) },
         { field: 'map', label: 'Map' },
         { field: 'result', label: 'Result', wrap: true },
-        { field: 'duration_min', label: 'Min', num: true, fmt: (v) => d3.format('.0f')(v) },
+        { field: 'duration_min', label: 'Min', num: true, fmt: (v) => (v == null ? '—' : d3.format('.0f')(v)) },
         { field: 'replay', label: 'Replay', fmt: (v) => REPLAY_LABEL[v] || v, cls: (v) => (v === 'analysed' || v === 'scenario' ? '' : 'warn') },
         { field: 'has_playback', label: 'Playback', fmt: (v, r) => (Number(v) === 1 ? 'Yes' : r.replay === 'analysed' ? 'Not yet' : '—') },
       ], 'match_id', {
@@ -508,6 +566,7 @@
     // game card
     const title = el('rv-game-title'), note = el('rv-game-note'), lk = el('rv-links');
     if (isSample) {
+      drawAdd(null);
       title.textContent = 'Sample game';
       el('rv-dl-note').replaceChildren();
       note.textContent = 'A public replay of two pro players, included so you can try the viewer before your own games are analyzed.';
@@ -521,7 +580,7 @@
       title.replaceChildren(g ? mark('review_list', { match_id: mid }, 'map', g.map, 'span') : document.createTextNode('Game'),
         document.createTextNode(g ? ` · ${d3.utcFormat('%b %-d, %Y')(new Date(g.started))}` : ''));
       note.replaceChildren();
-      if (g) note.append(mark('review_list', { match_id: mid }, 'result', g.result, 'span'), ` · ${d3.format('.0f')(g.duration_min)} min · ${g.tournament ? 'Tournament game · ' : ''}${g.type}`);
+      if (g) note.append(mark('review_list', { match_id: mid }, 'result', g.result, 'span'), `${g.duration_min == null ? '' : ` · ${d3.format('.0f')(g.duration_min)} min`} · ${g.tournament ? 'Tournament game · ' : ''}${g.type}`);
       else note.textContent = 'This game isn’t in the match list.';
       if (g && g.replay === 'scenario') note.append(` · Not analysed: ${REPLAY_WHY.scenario}`);
       else if (g && g.replay !== 'analysed') note.append(mk('span', 'tt-warn', ` · ⚠ ${REPLAY_WHY[g.replay]}`));
@@ -535,6 +594,7 @@
         code.style.userSelect = 'all';
         dl.append(code, '. A downloaded replay is a game file, not a video, so media players can’t open it.');
       }
+      drawAdd(g);
       const s = mk('button', 'tt-btn', 'Try the sample game'); s.type = 'button';
       s.addEventListener('click', () => dash.setParams({ m: 'sample' }));
       if (dash.data('pb_sample').status === 'ok') lk.appendChild(s); // the sample game is optional (data/playback/pb_sample.json)
@@ -545,7 +605,7 @@
     const pbId = isSample ? 'pb_sample' : g && g.has_playback ? g.playback_id : '';
     if (!pbId) {
       vbox.removeAttribute('data-source');
-      vbox.replaceChildren(empty(!g ? 'Pick a game above.' : g.replay === 'scenario' ? 'No map playback for custom scenarios.' : g.replay !== 'analysed' ? 'No map playback for this game: its replay isn’t available (see the note above).' : 'This game’s map playback hasn’t been rebuilt yet (older games are redone a few at a time with each update). The analysis below is complete.'));
+      vbox.replaceChildren(empty(!g ? 'Pick a game above.' : g.replay === 'noresult' || g.replay === 'norecord' ? 'No map playback for this game (see the note above).' : g.replay === 'scenario' ? 'No map playback for custom scenarios.' : g.replay !== 'analysed' ? 'No map playback for this game: its replay isn’t available (see the note above).' : 'This game’s map playback hasn’t been rebuilt yet (older games are redone a few at a time with each update). The analysis below is complete.'));
     } else {
       vbox.dataset.source = pbId;
       window.TT_viewer(vbox, pbId, (n) => (pidOf.size ? steamOr(n) : n));

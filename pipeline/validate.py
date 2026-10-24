@@ -46,6 +46,8 @@ def main():
     history = load(os.path.join(a.data, 'history.json'))
     analysis = load(os.path.join(a.data, 'replay_analysis.json'))
     games = load(os.path.join(a.data, 'replay_games.json'))
+    gaps = [r for r in (load(os.path.join(a.data, 'unrecorded.json')) if os.path.exists(os.path.join(a.data, 'unrecorded.json')) else [])
+            if r.get('kind') == 'not_in_records']
     with open(a.datasets) as f:
         docs = {d['id']: d.get('data', d) for d in json.load(f)}
 
@@ -92,7 +94,9 @@ def main():
             worst = 1.0
             for label, kind, ids in (('ranked 1v1', '1v1 ranked', ('rm_1v1', 'qp_rm_1v1')), ('ranked team', 'Team ranked', ('rm_team', 'qp_rm_team'))):
                 theirs = sum(lbs.get(i, 0) for i in ids)
-                ours = sum(1 for r in history if r['player'] == name and r.get('type') == kind)
+                # plus the games Microsoft counted but left out of its match history (found from rating jumps)
+                ours = sum(1 for r in history if r['player'] == name and r.get('type') == kind) + \
+                    sum(int(r.get('games') or 1) for r in gaps if r['player'] == name and r.get('type') == kind)
                 if theirs:
                     parts.append(f'{label} {ours:,} of {theirs:,}')
                     worst = min(worst, ours / theirs)

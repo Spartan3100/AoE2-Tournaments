@@ -16,7 +16,11 @@
     matches_file: 'config/matches.json', helper_app: 'config/app.json',
     history_file: 'data/history.json', replay_analysis: 'data/replay_analysis.json', replay_games: 'data/replay_games.json',
     data_check: 'data/data_check.json', meta: 'data/meta.json',
+    // games with no result, and games Microsoft left out of its match history (pipeline/run.py rating_gaps)
+    unrecorded: 'data/unrecorded.json',
   };
+  // files an older update may not have written yet: missing reads as empty
+  const OPTIONAL = new Set(['unrecorded']);
   // id -> {status, data, error}; votes and admin_changes are filled in by backend.js
   const store = { votes: { status: 'ok', data: [] }, admin_changes: { status: 'ok', data: [] } };
   const calcs = {};
@@ -54,7 +58,7 @@
     store[id] = { status: 'loading', data: [] };
     readFile(url)
       .then((d) => { store[id] = { status: 'ok', data: asRows(d) }; if (id === 'history_file') Live.start(); changed(); })
-      .catch((e) => { store[id] = { status: r404(e) ? 'missing' : 'error', data: [], error: String(e) }; changed(); });
+      .catch((e) => { store[id] = r404(e) && OPTIONAL.has(id) ? { status: 'ok', data: [] } : { status: r404(e) ? 'missing' : 'error', data: [], error: String(e) }; changed(); });
   }
   const r404 = (e) => /: 404$/.test(String(e && e.message));
 

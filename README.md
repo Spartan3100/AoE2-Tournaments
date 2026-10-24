@@ -77,6 +77,8 @@ Everyone invited sees a change straight away; the next update writes it into `co
 
 *Already set up before the Admin tab was added?* Run all of `supabase/schema.sql` again in the Supabase SQL Editor. It's safe to run again: everyone who already joined becomes a player, and you stay the owner.
 
+*Adding replays:* in **Games**, a game Microsoft has no replay of, or left out of its match history, offers **Add replay** to players and organizers. The file goes to a private Supabase storage bucket; the next update checks it is that game (right player, right time) and reads it. This needs `supabase/schema.sql` run again after 2026-10-24 (it adds the `replay_uploads` table and the `replays` bucket).
+
 Everything also lives in `config/` and is edited on GitHub (pencil icon), or by asking Claude Code to do it:
 
 | File | What it holds |
@@ -101,7 +103,7 @@ site/        the website (index.html, js/, css/), served by GitHub Pages
 config/      tournament setup, edited by the organizers
 seed/        empty starting data for the very first run
 pipeline/    update.py (games, replays, checks), apply_admin_changes.js, apply_confirmations.js, crypt.py (encryption)
-supabase/    schema.sql: invites, sign-in, confirmations, organizer changes, and who may read what
+supabase/    schema.sql: invites, sign-in, confirmations, organizer changes, added replays, and who may read what
 .github/     the workflow that runs everything every 30 minutes
 ```
 

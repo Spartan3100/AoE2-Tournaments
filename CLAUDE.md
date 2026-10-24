@@ -15,9 +15,11 @@ The site is invite-only: the workflow encrypts every JSON file in `config/` (exc
 - `config/*.json` - tournament setup edited by humans. `config/matches.json` also receives confirmed results from the workflow.
 - `seed/` - starting data for the first workflow run only. Live generated data is on the `data` branch (force-pushed each run); locally, copy `seed/` to `data/` to work.
 - `pipeline/update.py` -> `run.py` (match history + replays via `mgz`, patched in `analyze.py` for new game versions) -> `validate.py` (writes data/data_check.json).
+- Added replays: Games offers "Add replay" for a game with no replay or missing from Microsoft's history (render.js `drawAdd`, backend.js `TT_UPLOAD`). Files go to the private Supabase bucket `replays`, rows to `replay_uploads`; `pipeline/uploads.py fetch` hands waiting ones to run.py, whose `check_upload` checks the player is in the replay and the time fits (a missing game must be one `rating_gaps` found, never the site's copy of it) and adds it as history row `up_<id>`; `uploads.py mark` records done/rejected after deploy.
 
 ## Conventions
 - Rows are plain JSON arrays of objects. History rows: one per tracked player per game (`player, match_id, started, type, map, civ, opp_civ, won, rating, players_n, ...`).
+- `data/unrecorded.json` holds games that are not in win rates: `kind: no_result` (a disconnect: kept, never trimmed) and `kind: not_in_records` (found each run by `rating_gaps` in run.py from a rating jump between two games on the same ladder: Microsoft counted it but left it out of its match history). They count in game totals (`p_summary.unknown`) and show in the Games list.
 - Never trim history (it is all-time). Never commit generated data to `main`.
 - Text shown to players is plain English; set user-supplied strings with `textContent`.
 
