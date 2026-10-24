@@ -174,11 +174,15 @@ def check_upload(u, res, history, roster, gaps):
     # a game missing from Microsoft's history: one this job found (the site's copy of its details is not trusted), by
     # id, or, as an id names the games either side and can change when another game turns up, by when it was played
     mine = [r for r in gaps if r['player'] == u['player']]
-    g = next((r for r in mine if r['match_id'] == u['match_id']), None) or next(
-        (r for r in mine if when and ts(r['started']) - dt.timedelta(minutes=45) <= ts(when) <= ts(r['before']) + dt.timedelta(minutes=5)), None)
+    # a missing game starts after the game before it ended (10 minutes' slack for the two clocks)
+    lo, hi = lambda r: (ts(r['started']) - dt.timedelta(minutes=10)).isoformat(), lambda r: (ts(r['before']) + dt.timedelta(minutes=5)).isoformat()
+    g = next((r for r in mine if r['match_id'] == u['match_id']), None) or next((r for r in mine if near(lo(r), hi(r))), None)
+    listed = next((r for r in history if r['player'] == u['player'] and when and abs((ts(r['started']) - ts(when)).total_seconds()) < 180), None)
+    if listed is not None:
+        raise ValueError(f"This replay is of a game that is already listed ({listed['started'][:16].replace('T', ' ')} UTC)")
     if g is None:
         raise ValueError('That game is no longer missing (it may have turned up, or a replay was already added for it)')
-    if not near((ts(g['started']) - dt.timedelta(minutes=45)).isoformat(), (ts(g['before']) + dt.timedelta(minutes=5)).isoformat()):
+    if not near(lo(g), hi(g)):
         raise ValueError(f"This replay is from {when[:16].replace('T', ' ') or 'an unknown time'} UTC; the missing game was between "
                          f"{g['started'][:16].replace('T', ' ')} and {g['before'][:16].replace('T', ' ')} UTC")
     players = res['players']
