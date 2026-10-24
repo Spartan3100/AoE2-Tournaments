@@ -88,6 +88,40 @@ def game_type(m, n_players):
     return 'Other'
 
 
+BACKFILL_V = 2
+MAX_ONE_GAME = 32  # the most one ranked game moves a rating (Elo, K = 32)
+
+
+def rating_gaps(history, no_result):
+    """Games Microsoft counted on the ladder but left out of its match history (so no site can list them): a
+    player's rating before a ranked game should be their rating after the previous game on the same ladder. A jump
+    in between is one or more unlisted games. Only rows that know their ladder are compared (quick play and ranked
+    1v1 are separate ratings), and the history between them is complete, as each player's pages are fetched in order."""
+    out = []
+    chains = {}
+    for r in list(history) + list(no_result):
+        if r.get('ladder') and r.get('rating') is not None and 'ranked' in str(r.get('type', '')):
+            chains.setdefault((r['player'], r['ladder']), []).append(r)
+    for (player, ladder), rows in chains.items():
+        rows.sort(key=lambda r: r['started'])
+        for a, b in zip(rows, rows[1:]):
+            if a.get('rating_diff') is None and a.get('won') is not None:
+                continue
+            after = int(a['rating']) + int(a.get('rating_diff') or 0)
+            jump = int(b['rating']) - after
+            if not jump:
+                continue
+            end = dt.datetime.fromisoformat(a['started'].replace('Z', '+00:00')) + dt.timedelta(minutes=float(a.get('duration_min') or 0))
+            one = abs(jump) <= MAX_ONE_GAME
+            out.append({
+                'player': player, 'match_id': f"gap-{a['match_id']}-{b['match_id']}", 'kind': 'not_in_records',
+                'started': end.strftime('%Y-%m-%dT%H:%M:%SZ'), 'before': b['started'], 'type': a['type'], 'ladder': ladder,
+                'rating': after, 'rating_diff': jump, 'won': (1 if jump > 0 else 0) if one else None,
+                'games': 1 if one else -(-abs(jump) // MAX_ONE_GAME),  # at least this many
+            })
+    return sorted(out, key=lambda r: r['started'], reverse=True)
+
+
 def history_rows(m, roster_by_pid):
     """One row per tournament player in this match, in the dashboard's history shape."""
     mid = str(pick(m, 'matchId', 'match_id', 'id'))
@@ -106,8 +140,9 @@ def history_rows(m, roster_by_pid):
         for p in t.get('players', []) or []:
             everyone.append((pick(t, 'teamId', 'team', default=pick(p, 'team')), p))
     n = len(everyone)
-    if not any(pick(q, 'won') in (True, False, 1, 0) for _, q in everyone):
-        return []  # no result recorded (abandoned or still being scored): left out, like AoE2 Companion's stats
+    # no result recorded (a disconnect, or still being scored): kept apart in unrecorded.json, so it counts as a game
+    # played without counting as a win or a loss
+    no_result = not any(pick(q, 'won') in (True, False, 1, 0) for _, q in everyone)
     gtype = game_type(m, n)
     ids = replay_ids(everyone)
     rows = []
@@ -125,10 +160,11 @@ def history_rows(m, roster_by_pid):
             'opp_civ': civ(opps[0]) if len(opps) == 1 else '', 'opp_name': pick(opps[0], 'name', default='') if len(opps) == 1 else '',
             'opp_civs': ', '.join(civ(q) for q in opps), 'team_civs': ', '.join(civ(q) for q in mates),
             'teammates': ', '.join(str(pick(q, 'name', default='')) for q in mates),
-            'players_n': n, 'won': 1 if won is True or won == 1 else 0,
+            'players_n': n, 'won': None if no_result else 1 if won is True or won == 1 else 0,
             'rating': pick(p, 'rating'), 'rating_diff': pick(p, 'ratingDiff', 'rating_diff'),
             'duration_min': round((f - s).total_seconds() / 60 * 1.0, 1),
             'replay': 1 if pick(p, 'replay') else 0, 'profile_id': pid, 'replay_ids': ids,
+            'ladder': str(pick(m, 'leaderboardId', 'leaderboard', default='') or ''),
         })
     return rows
 
@@ -168,6 +204,13 @@ def main():
     backfill = load(os.path.join(a.inp, 'backfill.json'), {})  # profile id -> {page, done}: how far each history is fetched
     if not isinstance(backfill, dict):
         backfill = {}
+    # games without a result (kept apart from history so they never count as a win or a loss)
+    no_result = {(r['player'], r['match_id']): r for r in load(os.path.join(a.inp, 'unrecorded.json'), []) if r.get('kind') == 'no_result'}
+    # walk every history once more (BACKFILL_V): the first walk dropped games without a result and didn't keep which
+    # ladder each game was on, which is what finding games missing from Microsoft's records needs
+    for pid, st in list(backfill.items()):
+        if isinstance(st, dict) and st.get('v') != BACKFILL_V:
+            backfill[pid] = {'page': 1, 'done': False, 'v': BACKFILL_V}
     stats_note = []
 
     # ---------- 1. matches
@@ -183,10 +226,17 @@ def main():
         rows = [r for m in ms for r in history_rows(m, roster) if r['started'] >= cut]
         for r in rows:
             k = (r['player'], r['match_id'])
+            if r['won'] is None:
+                if k not in known:
+                    no_result[k] = {**r, 'kind': 'no_result'}
+                continue
+            no_result.pop(k, None)  # a result has come in since
             if k in known:
                 have = by_key.get(k)
-                if r.get('replay_ids') and have is not None and not have.get('replay_ids'):
-                    have['replay_ids'] = r['replay_ids']
+                if have is not None:
+                    for f in ('replay_ids', 'ladder'):
+                        if r.get(f) and not have.get(f):
+                            have[f] = r[f]
                 continue
             known.add(k)
             by_key[k] = r
@@ -222,7 +272,7 @@ def main():
     # onto later pages, so resuming by page number can repeat a game (skipped as known) but never miss one.
     pages_left = a.backfill_pages
     for pid, name in roster.items():
-        st = backfill.setdefault(pid, {'page': 1, 'done': False})
+        st = backfill.setdefault(pid, {'page': 1, 'done': False, 'v': BACKFILL_V})
         while not st['done'] and pages_left > 0:
             try:
                 ms = page_of(pid, st['page'])
@@ -238,6 +288,7 @@ def main():
             st['page'] += 1
             time.sleep(1.5)
     history.sort(key=lambda r: (r['started'], r['player']), reverse=True)
+    unrecorded = sorted(no_result.values(), key=lambda r: r['started'], reverse=True) + rating_gaps(history, list(no_result.values()))
 
     # ---------- 2. replays
     # every game gets one try (newest first, max_replays per run); analysis is kept for good once made, so a player's
@@ -414,7 +465,7 @@ def main():
     with open(os.path.join(a.out, 'backfill.json'), 'w') as f:
         json.dump(backfill, f)
     written = ['backfill.json']
-    for name, rows, cols in (('history.json', history, None), ('replay_analysis.json', analysis, AN_COLS), ('replay_games.json', games, GAME_COLS)):
+    for name, rows, cols in (('history.json', history, None), ('unrecorded.json', unrecorded, None), ('replay_analysis.json', analysis, AN_COLS), ('replay_games.json', games, GAME_COLS)):
         if not rows and cols:
             # the dashboard can't read an empty JSON list, so an empty result is a header-only CSV
             name = name[:-5] + '.csv'
@@ -432,6 +483,7 @@ def main():
                   'replays_unreadable': outcome['unreadable'], 'custom_scenarios': outcome['scenario'], 'replay_download_errors': outcome['download_failed'],
                   'playbacks_stored': sum(1 for g in games if g.get('has_playback')),
                   'history_rows': len(history), 'analysis_rows': len(analysis),
+                  'games_without_result': len(no_result), 'rating_gaps': len(unrecorded) - len(no_result),
                   'history_backfill': {roster.get(k, k): ('done' if v.get('done') else f"page {v.get('page')}") for k, v in backfill.items()},
                   'notes': stats_note},
         'errors': errors[:50],
