@@ -5,7 +5,7 @@ import datetime as dt, json, os, sys, time, urllib.request, urllib.parse
 DATA = sys.argv[1]
 players = json.load(open('config/players.json'))
 hist = json.load(open(os.path.join(DATA, 'history.json')))
-cut = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=48)
+cut = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=30)
 
 def get(url):
     req = urllib.request.Request(url, headers={'User-Agent': 'aoe2-tournaments-debug'})
@@ -16,6 +16,8 @@ def get(url):
         return {'_error': str(e)[:120]}
 
 for i, p in enumerate(players, 1):
+    if i != 5:
+        continue
     pid = str(p.get('profile_id') or '')
     if not pid:
         continue
@@ -30,7 +32,8 @@ for i, p in enumerate(players, 1):
             continue
         me = [q for t in m.get('teams', []) for q in t.get('players', []) if str(q.get('profileId')) == pid]
         print('companion', m.get('matchId'), m.get('started'), m.get('finished'), m.get('leaderboardId'), m.get('gameModeName') or m.get('gameMode'),
-              'n', sum(len(t.get('players', [])) for t in m.get('teams', [])), 'won', [q.get('won') for q in me])
+              'n', sum(len(t.get('players', [])) for t in m.get('teams', [])), 'won', [q.get('won') for q in me],
+              'rating', [(q.get('rating'), q.get('ratingDiff')) for q in me])
     time.sleep(1.5)
     for q in ([pid], [int(pid)]):
         url = 'https://aoe-api.worldsedgelink.com/community/leaderboard/getRecentMatchHistory?title=age2&profile_ids=' + urllib.parse.quote(json.dumps(q))
@@ -46,6 +49,8 @@ for i, p in enumerate(players, 1):
         if st < cut.timestamp():
             continue
         res = [r.get('resulttype') for r in m.get('matchhistoryreportresults', []) if str(r.get('profile_id')) == pid]
+        mem = [x for x in m.get('matchhistorymember', []) if str(x.get('profile_id')) == pid]
+        print('  rating', [(x.get('oldrating'), x.get('newrating')) for x in mem])
         print('microsoft', m.get('id'), dt.datetime.fromtimestamp(st, dt.timezone.utc).isoformat(),
               'end', m.get('completiontime'), 'type', m.get('matchtype_id'), 'n', m.get('maxplayers'),
               'reports', len(m.get('matchhistoryreportresults', [])), 'result', res)
