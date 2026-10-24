@@ -55,3 +55,19 @@ for i, p in enumerate(players, 1):
               'end', m.get('completiontime'), 'type', m.get('matchtype_id'), 'n', m.get('maxplayers'),
               'reports', len(m.get('matchhistoryreportresults', [])), 'result', res)
     time.sleep(1.5)
+
+# previous ranked games and Microsoft's ladder totals for player #5
+p = players[4]; pid = str(p['profile_id'])
+rows = sorted([r for r in hist if r.get('player') == p['player'] and r.get('type') == 'rm_1v1' or (r.get('player') == p['player'] and 'rm_1v1' in str(r.get('type')))], key=lambda r: r['started'])
+print('dashboard types', sorted({r.get('type') for r in hist if r.get('player') == p['player']}))
+rm = sorted([r for r in hist if r.get('player') == p['player'] and r.get('players_n') == 2 and r.get('rating')], key=lambda r: r['started'])
+for r in rm[-5:]:
+    print('prev', r['match_id'], r['started'], r.get('type'), 'rating', r.get('rating'), r.get('rating_diff'), 'won', r.get('won'))
+print('dashboard 1v1 rated rows', len(rm), 'wins', sum(1 for r in rm if r.get('won')))
+w = get('https://aoe-api.worldsedgelink.com/community/leaderboard/GetPersonalStat?title=age2&profile_ids=' + urllib.parse.quote(json.dumps([int(pid)])))
+print('personal keys', sorted(w.keys()))
+for s in w.get('leaderboardStats', []):
+    print('ladder', s.get('leaderboard_id'), 'wins', s.get('wins'), 'losses', s.get('losses'), 'drops', s.get('drops'), 'disputes', s.get('disputes'), 'rating', s.get('rating'), 'last', s.get('lastmatchdate'))
+c = get(f'https://data.aoe2companion.com/api/profiles/{pid}')
+for l in c.get('leaderboards', []) or []:
+    print('companion ladder', l.get('leaderboardId'), 'games', l.get('games'), 'wins', l.get('wins'), 'losses', l.get('losses'), 'drops', l.get('drops'), 'rating', l.get('rating'))
