@@ -18,6 +18,7 @@ The site is invite-only: the workflow encrypts every JSON file in `config/` (exc
 
 ## Conventions
 - Rows are plain JSON arrays of objects. History rows: one per tracked player per game (`player, match_id, started, type, map, civ, opp_civ, won, rating, players_n, ...`).
+- `data/unrecorded.json` holds games that are not in win rates: `kind: no_result` (a disconnect: kept, never trimmed) and `kind: not_in_records` (found each run by `rating_gaps` in run.py from a rating jump between two games on the same ladder: Microsoft counted it but left it out of its match history). They count in game totals (`p_summary.unknown`) and show in the Games list.
 - Never trim history (it is all-time). Never commit generated data to `main`.
 - Text shown to players is plain English; set user-supplied strings with `textContent`.
 
