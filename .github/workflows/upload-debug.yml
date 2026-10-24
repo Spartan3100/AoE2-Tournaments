@@ -1,0 +1,27 @@
+# TEMPORARY (branch only, never merged): try an added replay end to end.
+name: Upload debug
+on:
+  push:
+    branches: ['claude/**']
+    paths: ['pipeline/debug_upload.py', '.github/workflows/upload-debug.yml']
+permissions:
+  contents: read
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r pipeline/requirements.txt
+      - name: Get the latest data
+        run: |
+          git fetch --depth 1 origin data
+          mkdir data_enc data
+          git archive FETCH_HEAD | tar -x -C data_enc
+          python pipeline/crypt.py decrypt data_enc data
+      - run: python pipeline/debug_upload.py data

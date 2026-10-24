@@ -615,7 +615,9 @@ function unknownGames(unrecorded) {
     return {
       match_id: mid, started: r.started, type: r.type, map: gap ? 'Unknown map' : r.map, duration_min: gap ? null : r.duration_min,
       players: rs.map((x) => x.player).join(', '), result, tournament: 0, replay: gap ? 'norecord' : 'noresult',
-      views: viewsOf(r).join('|'), has_playback: 0, playback_id: '', before: r.before || '',
+      views: viewsOf(r).join('|'), has_playback: 0, playback_id: '',
+      // what is known about a missing game, sent with a replay added for it (pipeline/run.py check_upload)
+      info: gap ? { started: r.started, before: r.before, type: r.type, ladder: r.ladder, rating: r.rating, rating_diff: r.rating_diff, games: r.games } : null,
     };
   });
 }

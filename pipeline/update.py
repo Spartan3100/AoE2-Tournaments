@@ -56,6 +56,7 @@ def main():
     for n in ('history', 'replay_analysis', 'replay_games', 'unrecorded'):
         wj(os.path.join(inp, n + '.json'), rj(os.path.join(DATA, n + '.json'), []))
     wj(os.path.join(inp, 'backfill.json'), rj(os.path.join(DATA, 'backfill.json'), {}))  # how far each player's history is fetched
+    py(os.path.join(HERE, 'uploads.py'), 'fetch', inp)  # replays members added on the site
     before = len(rj(os.path.join(DATA, 'history.json'), []))
     code = py(os.path.join(HERE, 'run.py'), '--in', inp, '--out', out, '--max-replays', str(a.max_replays),
               '--playback-days', '0', '--max-playbacks', '0')  # 0 = map playback for every game
@@ -71,6 +72,8 @@ def main():
             src = os.path.join(out, n + '.json')
             wj(os.path.join(DATA, n + '.json'), rj(src, []) if os.path.exists(src) else [])
         wj(os.path.join(DATA, 'backfill.json'), rj(os.path.join(out, 'backfill.json'), {}))
+        # what became of the added replays: recorded in Supabase once the site is published (uploads.py mark)
+        wj(os.path.join(ROOT, '_uploads_applied.json'), rj(os.path.join(out, 'uploads_result.json'), []))
         for f in os.listdir(out):
             if f.startswith('pb_') and f.endswith('.json'):
                 shutil.copy(os.path.join(out, f), os.path.join(PB, f))

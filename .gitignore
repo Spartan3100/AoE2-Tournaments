@@ -5,3 +5,4 @@ _site/
 __pycache__/
 *.pyc
 _admin_applied.json
+_uploads_applied.json

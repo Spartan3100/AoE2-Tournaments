@@ -8,6 +8,7 @@ parse_replay(path) -> dict with:
   playback:  compact event stream + terrain for the map playback viewer
 Only depends on the `mgz` parser (pip install mgz).
 """
+import datetime as dt
 import math
 import collections
 import importlib.util
@@ -402,6 +403,10 @@ def parse_replay(path, match_id='', keep_playback=True):
         'match_id': str(match_id), 'map': m.map.name, 'map_size': m.map.size, 'dimension': dim,
         'duration_min': round(duration.total_seconds() / 60, 1), 'rated': bool(m.rated),
         'version': str(m.game_version), 'players': len(players),
+        # when it was played (mgz reads it as local time with fromtimestamp; .timestamp() undoes that exactly) and the
+        # game speed (170 = normal), for matching an uploaded replay to its game and its game-time length to real time
+        'started_at': dt.datetime.fromtimestamp(m.timestamp.timestamp(), dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') if getattr(m, 'timestamp', None) else '',
+        'speed': int(getattr(m, 'speed_id', 0) or 0),
     }
     out = {'game': game, 'players': rows, 'units': units_rows, 'build': build_rows}
     if keep_playback:

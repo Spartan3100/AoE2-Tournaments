@@ -193,6 +193,29 @@
     await loadVotes();
   }
 
+  // ---------------------------------------------------------------- replays added on the site (pipeline/uploads.py)
+  const canAddReplays = () => !!st.session && st.member && st.role !== 'viewer';
+  async function addReplay(file, info) {
+    if (!canAddReplays()) throw new Error('Viewers can’t add replays.');
+    if (!/\.(aoe2record|zip)$/i.test(file.name)) throw new Error('Choose the game’s .aoe2record file.');
+    if (file.size > 50 * 1024 * 1024) throw new Error('That file is over 50 MB, too big for a replay.');
+    const path = `${st.session.user.id}/${Date.now()}-${file.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(-80)}`;
+    const up = await st.client.storage.from('replays').upload(path, file, { contentType: 'application/octet-stream', upsert: false });
+    if (up.error) throw up.error;
+    const { error } = await st.client.from('replay_uploads').insert({ match_id: info.match_id, player: info.player, game: info.game || {}, path, uploaded_by: st.session.user.id });
+    if (error) { await st.client.storage.from('replays').remove([path]); throw error; }
+  }
+  async function addedReplays(matchId) {
+    const { data, error } = await st.client.from('replay_uploads').select('id,match_id,player,status,message,created_at,uploaded_by,path').eq('match_id', matchId).order('id');
+    if (error) throw error;
+    return (data || []).map((r) => ({ ...r, mine: r.uploaded_by === st.session.user.id }));
+  }
+  async function takeBackReplay(r) {
+    const { error } = await st.client.from('replay_uploads').delete().eq('id', r.id);
+    if (error) throw error;
+    if (r.mine && r.path) await st.client.storage.from('replays').remove([r.path]);
+  }
+
   // ---------------------------------------------------------------- header: who's signed in
   function renderAuth() {
     const box = el('auth-box');
@@ -231,6 +254,7 @@
   };
   window.claude = { use: async (name) => { await ready; if (!st.member) return null; return name === 'db' ? db : name === 'user' ? user : null; } };
   window.TT_BACKEND = st;
+  window.TT_UPLOAD = { can: canAddReplays, send: addReplay, list: addedReplays, cancel: takeBackReplay };
   // the Admin tab (site/js/admin.js); the database rules (supabase/schema.sql) check every one of these again
   const rpc = async (name, args) => { const { data, error } = await st.client.rpc(name, args); if (error) throw error; return data; };
   window.TT_ORG = {

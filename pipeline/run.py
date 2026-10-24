@@ -140,6 +140,67 @@ def rating_gaps(history, no_result):
     return sorted(out, key=lambda r: r['started'], reverse=True)
 
 
+def read_replay(data, mid, playback=False):
+    """Parse replay bytes (a .aoe2record, or the zip Microsoft's server sends)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, 'rec.aoe2record')
+        if data[:2] == b'PK':
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                name = next(n for n in z.namelist() if n.endswith('.aoe2record'))
+                data = z.read(name)
+        with open(path, 'wb') as f:
+            f.write(data)
+        return parse_replay(path, match_id=mid, keep_playback=playback)
+
+
+def check_upload(u, res, history, roster):
+    """Is this uploaded replay the game it was added to? Returns (match_id, new history row or None) or raises
+    ValueError with a reason the site shows."""
+    pid = next((k for k, v in roster.items() if v == u['player']), None)
+    me = next((p for p in res['players'] if pid and p['profile_id'] == pid), None)
+    if not me:
+        raise ValueError(f"{u['player']} isn't in this replay")
+    when = res['game'].get('started_at') or ''
+    ts = lambda v: dt.datetime.fromisoformat(v.replace('Z', '+00:00'))
+    near = lambda lo, hi: when and ts(lo) <= ts(when) <= ts(hi)
+    if not str(u['match_id']).startswith('gap-'):
+        rows = [r for r in history if r['match_id'] == u['match_id'] and r['player'] == u['player']]
+        if not rows:
+            raise ValueError('That game isn\'t in the history')
+        lo, hi = (ts(rows[0]['started']) + dt.timedelta(hours=h) for h in (-2, 2))
+        if not near(lo.isoformat(), hi.isoformat()):
+            raise ValueError(f"This replay is from {when[:16].replace('T', ' ') or 'an unknown time'} UTC, not this game ({rows[0]['started'][:16].replace('T', ' ')} UTC)")
+        return u['match_id'], None
+    # a game missing from Microsoft's history: it must be played between the games either side of the rating jump
+    g = u.get('game') or {}
+    if not g.get('started') or not g.get('before'):
+        raise ValueError('Not enough is known about that game to check this replay')
+    if not near((ts(g['started']) - dt.timedelta(minutes=45)).isoformat(), (ts(g['before']) + dt.timedelta(minutes=5)).isoformat()):
+        raise ValueError(f"This replay is from {when[:16].replace('T', ' ') or 'an unknown time'} UTC; the missing game was between "
+                         f"{g['started'][:16].replace('T', ' ')} and {g['before'][:16].replace('T', ' ')} UTC")
+    players = res['players']
+    if ('1v1' in str(g.get('type'))) != (len(players) == 2):
+        raise ValueError(f'This replay has {len(players)} players; the missing game was a {g.get("type")} game')
+    opps = [p for p in players if p is not me and (me['team'] is None or p['team'] != me['team'])]
+    mates = [p for p in players if p is not me and p not in opps]
+    jump = int(g.get('rating_diff') or 0)
+    one = int(g.get('games') or 1) == 1
+    # one game's rating change says who won more reliably than the replay (whose result is missing after a drop)
+    won = (1 if jump > 0 else 0) if one and jump else int(me['won'])
+    speed = (res['game'].get('speed') or 170) / 100
+    mid = f"up_{int(u['id'])}"
+    return mid, {
+        'player': u['player'], 'match_id': mid, 'started': when, 'type': g.get('type', ''), 'map': res['game']['map'],
+        'civ': me['civ'], 'opp_civ': opps[0]['civ'] if len(opps) == 1 else '', 'opp_name': opps[0]['name'] if len(opps) == 1 else '',
+        'opp_civs': ', '.join(p['civ'] for p in opps), 'team_civs': ', '.join(p['civ'] for p in mates),
+        'teammates': ', '.join(p['name'] for p in mates), 'players_n': len(players), 'won': won,
+        # with its rating it closes the gap it fills (rating_gaps); a gap of several games stays, less this one
+        'rating': g.get('rating') if one else None, 'rating_diff': jump if one else None,
+        'duration_min': round(res['game']['duration_min'] / speed, 1), 'replay': 1, 'profile_id': pid, 'replay_ids': pid,
+        'ladder': g.get('ladder', ''), 'uploaded': 1,
+    }
+
+
 def history_rows(m, roster_by_pid):
     """One row per tournament player in this match, in the dashboard's history shape."""
     mid = str(pick(m, 'matchId', 'match_id', 'id'))
@@ -305,6 +366,30 @@ def main():
             take(ms)
             st['page'] += 1
             time.sleep(1.5)
+    # 1c. replays members added on the site (pipeline/uploads.py): checked against the game they were added to
+    uploaded, upload_results = {}, []
+    for u in load(os.path.join(a.inp, 'uploads.json'), []):
+        try:
+            with open(u['file'], 'rb') as f:
+                data = f.read()
+            if not data:
+                raise ValueError('The file was empty or too big')
+            try:
+                res = read_replay(data, '')
+            except Exception as e:  # noqa: BLE001
+                raise ValueError(f"Couldn't read this file as an AoE2 replay ({type(e).__name__})") from e
+            mid, row = check_upload(u, res, history, roster)
+            if row is not None and (row['player'], mid) not in known:
+                known.add((row['player'], mid))
+                by_key[(row['player'], mid)] = row
+                history.append(row)
+                added += 1
+            uploaded[mid] = data
+            upload_results.append({'id': u['id'], 'status': 'done', 'message': ''})
+        except Exception as e:  # noqa: BLE001
+            upload_results.append({'id': u['id'], 'status': 'rejected', 'message': str(e) if isinstance(e, ValueError) else f'{type(e).__name__}: {e}'})
+    games = [g for g in games if g['match_id'] not in uploaded]  # analysed again below, from the added file
+    analysis = [r for r in analysis if str(r.get('match_id')) not in uploaded]
     history.sort(key=lambda r: (r['started'], r['player']), reverse=True)
     unrecorded = sorted(no_result.values(), key=lambda r: r['started'], reverse=True) + rating_gaps(history, list(no_result.values()))
 
@@ -336,7 +421,9 @@ def main():
     for g in games:
         if g.get('status') == 'Could not read' and is_scenario(by_match.get(g['match_id'], [])) :
             g['status'] = 'Custom scenario'
-    order = sorted(todo.items(), key=lambda kv: kv[1][0]['started'], reverse=True) + sorted(again.items(), key=lambda kv: kv[1][0]['started'], reverse=True)
+    order = sorted(((k, v) for k, v in todo.items() if k in uploaded), key=lambda kv: kv[1][0]['started'], reverse=True) + \
+        sorted(((k, v) for k, v in todo.items() if k not in uploaded), key=lambda kv: kv[1][0]['started'], reverse=True) + \
+        sorted(again.items(), key=lambda kv: kv[1][0]['started'], reverse=True)
     for mid, rows in order:
         if tried >= a.max_replays:
             break
@@ -354,6 +441,8 @@ def main():
             pids += (r.get('replay_ids') or '').split(',')
         pids += [pid for _, pid in own]
         pids = [p for p in dict.fromkeys(pids) if p][:10]
+        if mid in uploaded:
+            data, used_pid, pids = uploaded[mid], 'added on the site', []
         for pid in pids:
             try:
                 data = get(REPLAY.format(mid=mid, pid=pid), binary=True)
@@ -455,7 +544,7 @@ def main():
         with open(os.path.join(a.out, fname), 'w') as f:
             json.dump(pb, f, separators=(',', ':'))
         games.append({**base, **{k: v for k, v in res['game'].items() if k != 'match_id'}, 'status': 'Analyzed',
-                      'has_playback': 1, 'playback_id': f'pb_{mid}', 'replay_profile_id': used_pid})
+                      'has_playback': 1, 'playback_id': f'pb_{mid}', 'replay_profile_id': used_pid, 'uploaded': 1 if mid in uploaded else 0})
         new_pb.append({'match_id': mid, 'file': fname, 'title': f"Playback {base['map']} {base['started'][:10]}"[:40]})
 
     # ---------- 3. playback retention
@@ -482,6 +571,8 @@ def main():
 
     with open(os.path.join(a.out, 'backfill.json'), 'w') as f:
         json.dump(backfill, f)
+    with open(os.path.join(a.out, 'uploads_result.json'), 'w') as f:
+        json.dump(upload_results, f)
     written = ['backfill.json']
     for name, rows, cols in (('history.json', history, None), ('unrecorded.json', unrecorded, None), ('replay_analysis.json', analysis, AN_COLS), ('replay_games.json', games, GAME_COLS)):
         if not rows and cols:
@@ -501,6 +592,7 @@ def main():
                   'replays_unreadable': outcome['unreadable'], 'custom_scenarios': outcome['scenario'], 'replay_download_errors': outcome['download_failed'],
                   'playbacks_stored': sum(1 for g in games if g.get('has_playback')),
                   'history_rows': len(history), 'analysis_rows': len(analysis),
+                  'replays_added_on_site': {'done': sum(1 for r in upload_results if r['status'] == 'done'), 'rejected': sum(1 for r in upload_results if r['status'] != 'done')},
                   'games_without_result': len(no_result), 'rating_gaps': len(unrecorded) - len(no_result),
                   'history_backfill': {roster.get(k, k): ('done' if v.get('done') else f"page {v.get('page')}") for k, v in backfill.items()},
                   'notes': stats_note},

@@ -277,6 +277,61 @@ create policy "organizers cancel changes" on public.admin_changes for delete to 
   public.is_organizer() and (created_by = auth.uid() or public.is_admin())
 );
 
+-- ---------------------------------------------------------------- replays added on the site
+-- For games Microsoft has no replay of, or left out of its match history: a member (not a viewer) adds their own copy
+-- of the replay. The file goes to the private storage bucket "replays", in a folder named after the person who added
+-- it; the update job (pipeline/uploads.py, with the service key) reads it, checks it is that game, analyses it and
+-- sets status to 'done' or 'rejected' with the reason in message.
+create table if not exists public.replay_uploads (
+  id bigint generated always as identity primary key,
+  match_id text not null check (length(match_id) <= 80),
+  player text not null check (length(player) <= 40),
+  -- for a game missing from Microsoft's history: what the site knows about it (time window, rating change)
+  game jsonb not null default '{}'::jsonb check (jsonb_typeof(game) = 'object' and length(game::text) < 2000),
+  path text not null check (length(path) <= 200),
+  uploaded_by uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  status text not null default 'waiting' check (status in ('waiting', 'done', 'rejected')),
+  message text not null default ''
+);
+alter table public.replay_uploads enable row level security;
+
+-- a member who is not a viewer
+create or replace function public.can_add_replays() returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.is_admin() or exists (select 1 from public.members where user_id = auth.uid() and role <> 'viewer');
+$$;
+grant execute on function public.can_add_replays() to authenticated;
+
+drop policy if exists "read added replays" on public.replay_uploads;
+create policy "read added replays" on public.replay_uploads for select to authenticated using (public.is_member());
+drop policy if exists "add a replay" on public.replay_uploads;
+create policy "add a replay" on public.replay_uploads for insert to authenticated with check (
+  uploaded_by = auth.uid() and status = 'waiting' and message = '' and public.can_add_replays()
+  and path like auth.uid()::text || '/%'
+);
+drop policy if exists "take back a replay" on public.replay_uploads;
+create policy "take back a replay" on public.replay_uploads for delete to authenticated using (
+  (uploaded_by = auth.uid() and status <> 'done') or public.is_admin()
+);
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('replays', 'replays', false, 52428800)
+on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit;
+drop policy if exists "add replay files" on storage.objects;
+create policy "add replay files" on storage.objects for insert to authenticated with check (
+  bucket_id = 'replays' and (storage.foldername(name))[1] = auth.uid()::text and public.can_add_replays()
+);
+-- (removing a file also needs to see it)
+drop policy if exists "see own replay files" on storage.objects;
+create policy "see own replay files" on storage.objects for select to authenticated using (
+  bucket_id = 'replays' and (storage.foldername(name))[1] = auth.uid()::text
+);
+drop policy if exists "remove own replay files" on storage.objects;
+create policy "remove own replay files" on storage.objects for delete to authenticated using (
+  bucket_id = 'replays' and (storage.foldername(name))[1] = auth.uid()::text
+);
+
 -- Last step: make yourself the owner. Replace the address with the email on the account you'll sign in with
 -- (for Discord, your Discord account's email), then run just this line.
 -- insert into public.admins (email) values ('you@example.com') on conflict do nothing;
