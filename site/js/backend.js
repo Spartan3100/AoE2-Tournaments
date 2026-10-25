@@ -41,6 +41,9 @@
     st.email = cfg.email === true;
     st.client = window.supabase.createClient(cfg.url, cfg.anon_key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
     try { const { data } = await st.client.auth.getSession(); st.session = data.session; } catch (e) { st.session = null; }
+    // the look kept with the account wins over this browser's, so it follows you to every device you sign in on
+    const saved = st.session && st.session.user.user_metadata && st.session.user.user_metadata.theme;
+    if (saved && window.TT_THEME && saved !== window.TT_THEME.get()) window.TT_THEME.set(saved, false);
     st.client.auth.onAuthStateChange((event, s) => {
       const was = st.session && st.session.user.id;
       st.session = s;
@@ -254,6 +257,12 @@
   };
   window.claude = { use: async (name) => { await ready; if (!st.member) return null; return name === 'db' ? db : name === 'user' ? user : null; } };
   window.TT_BACKEND = st;
+  // render.js's look picker: kept in the account's own settings (Supabase user metadata, which only that person can change)
+  st.saveTheme = async (theme) => {
+    if (!st.session) return;
+    const { error } = await st.client.auth.updateUser({ data: { theme } });
+    if (error) console.error('saving the look', error);
+  };
   // games that already have an added replay waiting or read (so the replay folder doesn't add another)
   async function claimedGames() {
     const { data, error } = await st.client.from('replay_uploads').select('match_id,status').in('status', ['waiting', 'done']);

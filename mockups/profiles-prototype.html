@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Players &amp; Profiles Prototype</title>
+<style>
+/* Clickable prototype of the "Players & profiles" tab (not served). Sample data only, generated in the page.
+   The dark bar is the prototype's own: it switches the visual style and opens "Your choices". */
+:root { --pbar-h: 44px; --pbar: #26241f; --pbar-fg: #f4f1ea; --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --serif: Georgia, "Times New Roman", serif; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; overflow-x: hidden; }
+body { background: var(--pbar); font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.pbar { position: sticky; top: 0; z-index: 50; background: var(--pbar); color: var(--pbar-fg); padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; min-height: var(--pbar-h); }
+.pbar .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-right: 6px; }
+.pbar .seg { display: inline-flex; border: 1px solid rgba(244,241,234,.5); border-radius: 999px; overflow: hidden; }
+.pbar .seg button { background: none; border: 0; color: inherit; padding: 3px 12px; font-size: 13px; }
+.pbar .seg button[aria-pressed="true"] { background: var(--pbar-fg); color: var(--pbar); }
+.pbar .grow { flex: 1; }
+.pbar .pick { background: #d4a24c; color: #1d1a14; border: 0; border-radius: 999px; padding: 5px 14px; font-weight: 600; }
+@media (max-width: 760px) { .pbar { padding: 6px 10px; } .pbar .lbl { display: none; } .pbar .seg button { padding: 2px 8px; font-size: 12px; } }
+
+/* three styles: every colour is a token */
+.app { --r: 10px; min-height: calc(100vh - var(--pbar-h)); background: var(--bg); color: var(--fg); }
+.app[data-style="clean"] { --bg: #f5f6f8; --panel: #ffffff; --fg: #17191d; --muted: #646b76; --line: #e2e5ea; --soft: #eef1f5;
+  --accent: #2563eb; --accent-fg: #ffffff; --accent-soft: #e5edfd; --ok: #15803d; --ok-soft: #e6f4ea; --bad: #c2410c; --bad-soft: #fdeee6; --warn: #a16207; --head: var(--sans); --hw: 650; --shadow: 0 1px 2px rgba(16,24,40,.06);
+  --c1: #2563eb; --c2: #15803d; --c3: #d97706; --c4: #7c3aed; --c5: #0891b2; --c6: #6b7280; }
+.app[data-style="dark"] { --bg: #0f1218; --panel: #171c25; --fg: #e9e6df; --muted: #9aa1ad; --line: #262d39; --soft: #1e2430;
+  --accent: #d4a24c; --accent-fg: #17130a; --accent-soft: #2e2716; --ok: #5ccf8c; --ok-soft: #173225; --bad: #f2795f; --bad-soft: #3a1e18; --warn: #e4b85b; --head: var(--sans); --hw: 650; --shadow: none;
+  --c1: #d4a24c; --c2: #5ccf8c; --c3: #6aa8f0; --c4: #c58af0; --c5: #f2795f; --c6: #9aa1ad; }
+.app[data-style="classic"] { --bg: #ece3cf; --panel: #faf4e6; --fg: #2a2116; --muted: #6f604a; --line: #d9ccb0; --soft: #f1e8d4;
+  --accent: #8c2f1f; --accent-fg: #fbf3e4; --accent-soft: #f2dccf; --ok: #3d6b2e; --ok-soft: #e3ead3; --bad: #8c2f1f; --bad-soft: #f2dccf; --warn: #8a5a12; --head: var(--serif); --hw: 600; --shadow: 0 1px 0 rgba(90,60,20,.12); --r: 6px;
+  --c1: #8c2f1f; --c2: #3d6b2e; --c3: #b8862b; --c4: #3b5b7a; --c5: #6e4a7a; --c6: #7a7a6a; }
+.app[data-style="classic"] .card { border-width: 1px 1px 2px; }
+/* classic wins are green and losses red-brown; in classic --bad equals the accent, so give losses their own shade */
+.app[data-style="classic"] { --bad: #a8412a; }
+
+.shell { max-width: 1040px; margin: 0 auto; padding: 18px 16px 56px; display: grid; gap: 16px; }
+.ph h1 { font-family: var(--head); font-weight: var(--hw); font-size: 24px; margin: 0; }
+.ph p { margin: 2px 0 0; color: var(--muted); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; box-shadow: var(--shadow); min-width: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.btn { border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 8px; padding: 6px 12px; font-weight: 500; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; border-radius: 999px; padding: 1px 9px; background: var(--soft); color: var(--muted); white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.pill.acc { background: var(--accent-soft); color: var(--accent); }
+.subnav { display: flex; gap: 6px; flex-wrap: wrap; }
+.subnav button { border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 999px; padding: 5px 14px; }
+.subnav button[aria-current="true"] { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+.filters { display: grid; gap: 10px; }
+.filters .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.filters .row > .k { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); width: 58px; flex: none; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: inline-grid; place-items: center; font-weight: 700; font-size: 12px; flex: none; }
+.avatar.big { width: 64px; height: 64px; font-size: 26px; font-family: var(--head); }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; }
+th button { background: none; border: 0; padding: 0; color: inherit; font-weight: 500; font-size: 12px; }
+th button[aria-sort] { color: var(--accent); font-weight: 650; }
+td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.scroll { overflow: auto; max-height: 400px; }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.list li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.list li .grow { flex: 1; min-width: 100px; }
+.bar { height: 7px; border-radius: 4px; background: var(--soft); overflow: hidden; position: relative; min-width: 60px; }
+.bar i { display: block; height: 100%; }
+.bar b { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--muted); opacity: .6; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 10px; }
+.tile { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--soft); min-width: 0; }
+.tile .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .s { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.tile .s.up { color: var(--ok); } .tile .s.dn { color: var(--bad); }
+
+/* sections */
+.sec h2 { font-family: var(--head); font-weight: var(--hw); font-size: 17px; margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sec h2 .n { color: var(--accent); font-size: 13px; font-family: var(--sans); }
+.sec .head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.optsw { display: inline-flex; align-items: center; gap: 8px; }
+.optsw .seg2 { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--panel); }
+.optsw .seg2 button { background: none; border: 0; padding: 3px 12px; color: var(--muted); font-weight: 600; }
+.optsw .seg2 button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+.optname { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+.ch { width: 100%; position: relative; }
+.ch svg { display: block; max-width: 100%; overflow: visible; }
+.ax { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.lab { fill: var(--fg); font-size: 12px; }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.empty { padding: 28px 8px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; }
+.subh { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 14px 0 6px; }
+[data-tip] { cursor: default; }
+.tip { position: fixed; z-index: 90; pointer-events: none; background: var(--fg); color: var(--bg); padding: 6px 10px; border-radius: 6px; font-size: 12px; line-height: 1.4; max-width: 240px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.tip b { display: block; }
+.hero2 { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.hero2 .nm { font-family: var(--head); font-weight: var(--hw); font-size: 26px; line-height: 1.1; }
+.hero2 .grow { flex: 1; min-width: 160px; }
+.hero2 .big { text-align: right; }
+.hero2 .big .v { font-family: var(--head); font-size: 44px; font-weight: var(--hw); line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+.board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 20px; }
+@media (max-width: 640px) { .board { grid-template-columns: 1fr; } .hero2 .big { text-align: left; } }
+.stat-row { display: grid; grid-template-columns: 92px minmax(0,1fr) 64px; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.stat-row:last-child { border-bottom: 0; }
+.stat-row .k { color: var(--muted); font-size: 12px; } .stat-row .v { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; }
+.pips { display: flex; gap: 3px; } .pips i { width: 12px; height: 12px; border-radius: 3px; display: block; flex: none; }
+.gauge { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.gauge dl { margin: 0; display: grid; grid-template-columns: auto auto; gap: 6px 22px; flex: 1; min-width: 200px; }
+.gauge dt { color: var(--muted); } .gauge dd { margin: 0; text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; }
+.split { display: grid; grid-template-columns: 170px minmax(0,1fr); gap: 18px; align-items: center; }
+@media (max-width: 560px) { .split { grid-template-columns: 1fr; justify-items: center; } .split > div:last-child { width: 100%; } }
+.leg-list { display: grid; gap: 6px; }
+.leg-list .r { display: grid; grid-template-columns: 12px minmax(0,1fr) auto auto; gap: 8px; align-items: center; font-size: 13px; }
+.leg-list .r i { width: 10px; height: 10px; border-radius: 2px; display: block; }
+.hist3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.hist3 h4 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+.hide-sm { }
+@media (max-width: 520px) { .hide-sm { display: none; } }
+
+/* choices drawer */
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); background: var(--panel); border-left: 1px solid var(--line); z-index: 80; display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(0,0,0,.25); }
+.drawer header { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+.drawer header h3 { margin: 0; font-family: var(--head); font-weight: var(--hw); font-size: 18px; flex: 1; }
+.drawer .body { padding: 12px 16px; overflow: auto; flex: 1; display: grid; gap: 10px; align-content: start; }
+.drawer .item { border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; gap: 6px; background: var(--bg); }
+.drawer .item.dropped { opacity: .6; }
+.drawer .item .t { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.drawer .item .t b { font-size: 13px; }
+.drawer textarea { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; resize: vertical; min-height: 40px; }
+.drawer footer { border-top: 1px solid var(--line); padding: 12px 16px; display: grid; gap: 8px; }
+.drawer footer textarea { min-height: 150px; font-size: 12px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.toggle { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 2px 12px; font-size: 12px; font-weight: 600; }
+.toggle[aria-pressed="true"] { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+.toggle[aria-pressed="false"] { background: var(--bad-soft); color: var(--bad); border-color: var(--bad); }
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 70; }
+</style>
+</head>
+<body>
+<div class="pbar">
+  <strong>Players &amp; profiles prototype</strong>
+  <span class="lbl">Style</span>
+  <span class="seg" id="styleSeg"></span>
+  <span class="grow"></span>
+  <button class="pick" id="openChoices">Your choices</button>
+</div>
+<div class="app" id="app" data-style="classic">
+  <div class="shell">
+    <div class="ph"><h1>Players &amp; profiles</h1><p>Sample data for five friends, about 500 games each. Pick a player, a view and a period, then choose an option in each section.</p></div>
+    <div class="card filters" id="filters"></div>
+    <div id="sections" style="display:grid;gap:16px"></div>
+  </div>
+  <div class="tip" id="tip" hidden></div>
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="drawer" id="drawer" hidden aria-label="Your choices"></aside>
+</div>
+
+<script>
+"use strict";
+/* ============================ sample data ============================ */
+const PLAYERS = ['Ryan', 'Daniel', 'Christopher', 'Joe', 'Nathan'];
+const CIVS = ['Franks','Mongols','Britons','Aztecs','Mayans','Persians','Teutons','Vikings','Byzantines','Chinese','Magyars','Lithuanians','Spanish','Turks','Ethiopians','Huns','Khmer','Portuguese','Poles','Burgundians','Bulgarians','Celts','Japanese','Hindustanis'];
+const MAPS = ['Arabia','Arena','Black Forest','Nomad','Islands','Team Islands','Mediterranean','Gold Rush','Highland','Baltic','Coastal','Four Lakes'];
+const OPENINGS = ['Scouts into Archers','Men-at-Arms into Archers','Drush into Archers','Fast Castle','Straight Archers'];
+const ARMY = ['Infantry','Archers','Cavalry','Siege','Monks & other'];
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const TODAY = Date.UTC(2026, 9, 25, 22, 0, 0), DAY = 864e5;
+const TEAM_MINE = 6, TEAM_THEIRS = 5;
+
+function rng(seed) { let a = seed >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function pickW(r, w) { let s = 0; for (const x of w) s += x; let v = r() * s; for (let i = 0; i < w.length; i++) { v -= w[i]; if (v <= 0) return i; } return w.length - 1; }
+function gauss(r) { return Math.sqrt(-2 * Math.log(r() + 1e-9)) * Math.cos(6.2832 * r()); }
+
+function genPlayer(pi) {
+  const r = rng(9001 + pi * 131);
+  const prof = {
+    skill: [0.515, 0.50, 0.47, 0.535, 0.49][pi], target: [1480, 1390, 1250, 1560, 1330][pi], eapm: [78, 64, 52, 91, 70][pi],
+    lenSlope: [0.04, -0.05, 0.06, 0.0, -0.03][pi], peakHour: [21, 20, 22, 19, 23][pi], feudal: [-0.3, 0.2, 0.9, -0.6, 0.1][pi],
+    civW: CIVS.map(() => 0.25 + r() * 0.5), civEdge: CIVS.map(() => gauss(r) * 0.05), oppEdge: CIVS.map(() => gauss(r) * 0.045),
+    mapW: MAPS.map(() => 0.3 + r() * 0.7), mapEdge: MAPS.map(() => gauss(r) * 0.045),
+    openW: OPENINGS.map(() => 0.3 + r()), mix: ARMY.map((_, i) => [0.28, 0.3, 0.25, 0.1, 0.07][i] * (0.7 + r() * 0.6)),
+  };
+  for (let k = 0; k < 4; k++) { const c = Math.floor(r() * CIVS.length); prof.civW[c] += 1.6; prof.civEdge[c] += 0.05; }
+  const games = [], ratings = { one: prof.target - 120 + r() * 60, team: prof.target - 200 + r() * 60 };
+  for (let i = 0; i < 500; i++) {
+    const d = Math.floor(730 * Math.pow(r(), 1.3)), mr = r();
+    const mode = mr < 0.52 ? 'r1' : mr < 0.78 ? 'rt' : mr < 0.9 ? 'unr' : 'tour';
+    let hour = Math.round(prof.peakHour + gauss(r) * 2.6); hour = ((hour % 24) + 24) % 24;
+    const wd = pickW(r, [0.8, 0.9, 1, 1, 1.2, 1.6, 1.5]);
+    const ts = TODAY - d * DAY - (22 - hour) * 36e5;
+    let civ = pickW(r, mode === 'rt' ? prof.civW.map((w, k) => (k < TEAM_MINE ? w * 3 : w * 0.05)) : prof.civW);
+    const opp = Math.floor(r() * CIVS.length), map = pickW(r, prof.mapW);
+    const len = Math.max(6, Math.min(75, 9 - Math.log(r() + 1e-6) * 15 + (mode === 'rt' ? 6 : 0)));
+    let p = prof.skill + prof.civEdge[civ] + prof.oppEdge[opp] + prof.mapEdge[map] + prof.lenSlope * (len - 28) / 12 + (mode === 'tour' ? -0.03 : 0);
+    p = Math.max(0.2, Math.min(0.82, p));
+    const won = r() < p, k = 12 + r() * 9;
+    const g = { id: pi * 1000 + i, ts, civ: CIVS[civ], opp: CIVS[opp], map: MAPS[map], mode, won, len, hour, wd: (new Date(ts)).getUTCDay() === 0 ? 6 : (new Date(ts)).getUTCDay() - 1, k, rating: 0, eapm: Math.round(prof.eapm + gauss(r) * 8) };
+    if (mode === 'rt') { let tm = Math.floor(r() * 4); if (tm >= pi) tm++; g.tm = PLAYERS[tm]; g.tmCiv = CIVS[Math.floor(r() * TEAM_THEIRS)]; }
+    if (r() < 0.82) {
+      g.op = pickW(r, prof.openW);
+      const fe = 10.3 + prof.feudal + gauss(r) * 0.9 - (g.op === 3 ? -2.2 : 0) + (g.op === 4 ? 0.2 : 0);
+      g.feudal = Math.max(8, Math.min(len - 1, fe)); g.castle = g.feudal + (g.op === 3 ? 4.6 : 6.4) + gauss(r) * 1.1;
+      g.imp = len > 32 ? g.castle + 11 + Math.abs(gauss(r)) * 3.5 : null;
+      if (g.castle > len) g.castle = null; if (g.imp && g.imp > len) g.imp = null;
+      const m = prof.mix.map((v, k) => v * (0.6 + r() * 0.8) * (k === 2 && won ? 1.1 : 1)), s = m.reduce((a, b) => a + b, 0);
+      g.mix = m.map(v => v / s);
+    }
+    games.push(g);
+  }
+  games.sort((a, b) => a.ts - b.ts);
+  games.forEach(g => { const lad = g.mode === 'rt' ? 'team' : 'one'; ratings[lad] += (g.won ? 1 : -1) * g.k + (prof.target - ratings[lad]) * 0.012; g.rating = Math.round(ratings[lad]); });
+  return games;
+}
+const ALL = PLAYERS.map((_, i) => genPlayer(i));
+
+/* ============================ helpers ============================ */
+const NS = 'http://www.w3.org/2000/svg';
+function S(tag, a, kids) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in (a || {})) {
+    const v = a[k];
+    if (k === 'text') e.textContent = v;
+    else if (k === 'style') e.style.cssText += v;
+    else if (k === 'tip') e.setAttribute('data-tip', v);
+    else if (k === 'fill' || k === 'stroke' || k === 'color') e.style.setProperty(k, v);
+    else e.setAttribute(k, v);
+  }
+  (kids || []).forEach(c => c && e.appendChild(c));
+  return e;
+}
+function h(tag, cls, txt, kids) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; (kids || []).forEach(k => k && e.appendChild(k)); return e; }
+const lin = (d0, d1, r0, r1) => v => r0 + (v - d0) / ((d1 - d0) || 1) * (r1 - r0);
+function niceTicks(lo, hi, n) {
+  n = n || 5; const span = (hi - lo) || 1, mag = Math.pow(10, Math.floor(Math.log10(span / n)));
+  const st = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => span / s <= n) || mag * 10, t = [];
+  for (let v = Math.ceil(lo / st) * st; v <= hi + 1e-9; v += st) t.push(+v.toFixed(6));
+  return t;
+}
+const pc = x => Math.round(x * 100) + '%';
+const num = x => Math.round(x).toLocaleString('en-GB');
+const wl = (w, n) => w + '-' + (n - w);
+const fmtD = ts => new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const fmtM = ts => new Date(ts).toLocaleDateString('en-GB', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+const fmtT = m => { const s = Math.round(m * 60); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const trunc = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
+const winCol = wr => wr >= 0.5 ? 'var(--ok)' : 'var(--bad)';
+function heatCol(wr) { const k = Math.min(100, 18 + Math.abs(wr - 0.5) * 2 * 150); return 'color-mix(in srgb, ' + (wr >= 0.5 ? 'var(--ok)' : 'var(--bad)') + ' ' + k + '%, var(--soft))'; }
+function empty(host, msg) { host.appendChild(h('div', 'empty', msg || 'Not enough games in this view and period to draw this.')); }
+function group(arr, keyFn) { const m = new Map(); arr.forEach(x => { const k = keyFn(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); }); return m; }
+function rec(gs) { const w = gs.filter(x => x.won).length; return { n: gs.length, w, wr: gs.length ? w / gs.length : 0 }; }
+
+/* ============================ state & stats ============================ */
+const VIEWS = [['all', 'All games'], ['r1', 'Ranked 1v1'], ['rt', 'Ranked team'], ['unr', 'Unranked'], ['tour', 'Tournament']];
+const PERIODS = [['all', 'All time', 730], ['year', 'Last year', 365], ['half', 'Last 6 months', 183]];
+const SECS = [
+  { id: 'header', title: 'Header & headline numbers', opts: ['Hero banner', 'Scoreboard', 'Player card with gauge'] },
+  { id: 'rating', title: 'Rating over time', opts: ['Plain line', 'Tournament games marked', 'Area with win/loss dots'] },
+  { id: 'civs', title: 'Civs', opts: ['Sortable table', 'Bubble chart', 'Top 10 bar chart'] },
+  { id: 'maps', title: 'Maps', opts: ['Bar chart', 'Heat strip by month'] },
+  { id: 'matchups', title: 'Matchups vs opponent civs', opts: ['Best and worst lists', 'Diverging bars'] },
+  { id: 'length', title: 'Game length & time of day', opts: ['Win rate by length', 'Activity heatmap', 'Both together'] },
+  { id: 'strategy', title: 'Strategy from replays', opts: ['Openings donut', 'Age-up times vs group', 'Army mix'] },
+  { id: 'form', title: 'Recent form', opts: ['Last 20 games strip', 'Rolling win rate'] },
+  { id: 'team', title: 'Team games', opts: ['By teammate', 'Best civ combos'] },
+];
+const ST = { player: 0, view: 'all', period: 'all', style: 'classic', opt: {}, keep: {}, notes: {}, sort: { key: 'n', dir: -1 }, prompt: '' };
+SECS.forEach(s => { ST.opt[s.id] = 0; ST.keep[s.id] = true; ST.notes[s.id] = ''; });
+
+function filt(pi, view, period) {
+  const cut = TODAY - PERIODS.find(p => p[0] === period)[2] * DAY;
+  return ALL[pi].filter(g => g.ts >= cut && (view === 'all' || g.mode === view));
+}
+function ladderOf(g, view) { return g.filter(x => view === 'rt' ? x.mode === 'rt' : x.mode !== 'rt'); }
+function summary(g, view) {
+  const R = rec(g), lad = ladderOf(g, view);
+  let best = 0, run = 0, cur = 0, curW = null;
+  g.forEach(x => { run = x.won ? run + 1 : 0; best = Math.max(best, run); });
+  for (let i = g.length - 1; i >= 0; i--) { if (curW === null) curW = g[i].won; if (g[i].won === curW) cur++; else break; }
+  let peak = lad[0], first = lad[0];
+  lad.forEach(x => { if (x.rating > peak.rating) peak = x; });
+  return { n: R.n, w: R.w, wr: R.wr, now: lad.length ? lad[lad.length - 1].rating : null, first: first ? first.rating : null, peak: peak || null, ladN: lad.length, best, cur, curW, avgLen: g.length ? g.reduce((a, x) => a + x.len, 0) / g.length : 0, eapm: g.length ? g.reduce((a, x) => a + x.eapm, 0) / g.length : 0 };
+}
+function ctx() {
+  const pi = ST.player, g = filt(pi, ST.view, ST.period), st = summary(g, ST.view);
+  const grp = PLAYERS.map((_, i) => summary(filt(i, ST.view, ST.period), ST.view));
+  const rank = 1 + grp.filter((x, i) => i !== pi && (x.now || 0) > (st.now || 0)).length;
+  const gAll = [].concat(...PLAYERS.map((_, i) => filt(i, ST.view, ST.period))).filter(x => x.op != null);
+  const avg = f => { const v = gAll.map(f).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const gm = { wr: grp.reduce((a, x) => a + x.wr, 0) / 5, eapm: grp.reduce((a, x) => a + x.eapm, 0) / 5, feudal: avg(x => x.feudal), castle: avg(x => x.castle), imp: avg(x => x.imp), mix: ARMY.map((_, k) => avg(x => x.mix[k])) };
+  return { pi, name: PLAYERS[pi], g, st, grp, rank, gm, rep: g.filter(x => x.op != null), lad: ladderOf(g, ST.view) };
+}
+
+/* ============================ tooltip ============================ */
+const tipEl = document.getElementById('tip');
+function showTip(text, x, y) {
+  tipEl.textContent = '';
+  text.split('\n').forEach((l, i) => { const e = i === 0 ? document.createElement('b') : document.createElement('span'); e.textContent = l; tipEl.appendChild(e); if (i) tipEl.appendChild(document.createElement('br')); });
+  tipEl.hidden = false;
+  const r = tipEl.getBoundingClientRect();
+  tipEl.style.left = Math.max(6, Math.min(innerWidth - r.width - 6, x + 12)) + 'px';
+  tipEl.style.top = Math.max(6, y - r.height - 12 < 6 ? y + 18 : y - r.height - 12) + 'px';
+}
+const hideTip = () => { tipEl.hidden = true; };
+function onPtr(e) {
+  if (e._h) return;
+  const t = e.target.closest && e.target.closest('[data-tip]');
+  if (t) showTip(t.getAttribute('data-tip'), e.clientX, e.clientY); else hideTip();
+}
+document.addEventListener('pointermove', onPtr); document.addEventListener('pointerdown', onPtr);
+document.addEventListener('scroll', hideTip, true);
+
+/* ============================ chart primitives ============================ */
+function boxW(host) { return Math.max(240, Math.floor(host.clientWidth || 320)); }
+function mkSvg(w, hh, label) { return S('svg', { width: w, height: hh, viewBox: '0 0 ' + w + ' ' + hh, role: 'img', 'aria-label': label || 'chart' }); }
+
+/* line / area chart over time. o: pts[{t,y,tip,won,tour}], yMin,yMax, fmtY, ref, mode */
+function lineChart(host, o) {
+  const pts = o.pts; if (pts.length < 2) return empty(host);
+  const box = h('div', 'ch'); host.appendChild(box);
+  const w = boxW(box), hh = w < 480 ? 230 : 290, m = { l: 42, r: 12, t: 12, b: 26 };
+  let lo = o.yMin != null ? o.yMin : Math.min(...pts.map(p => p.y)), hi = o.yMax != null ? o.yMax : Math.max(...pts.map(p => p.y));
+  if (o.yMin == null) { const pad = (hi - lo) * 0.08 || 10; lo -= pad; hi += pad; }
+  const ticks = niceTicks(lo, hi, 4), t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+  const X = lin(t0, t1, m.l, w - m.r), Y = lin(lo, hi, hh - m.b, m.t);
+  const svg = mkSvg(w, hh, o.label || 'line chart'); box.appendChild(svg);
+  ticks.forEach(v => { svg.appendChild(S('line', { x1: m.l, x2: w - m.r, y1: Y(v), y2: Y(v), class: 'grid-l' })); svg.appendChild(S('text', { x: m.l - 6, y: Y(v) + 4, class: 'ax', 'text-anchor': 'end', text: (o.fmtY || num)(v) })); });
+  const nx = w < 480 ? 4 : 6;
+  for (let i = 0; i < nx; i++) { const t = t0 + (t1 - t0) * i / (nx - 1); svg.appendChild(S('text', { x: X(t), y: hh - 7, class: 'ax', 'text-anchor': i === 0 ? 'start' : i === nx - 1 ? 'end' : 'middle', text: fmtM(t) })); }
+  if (o.ref != null) { svg.appendChild(S('line', { x1: m.l, x2: w - m.r, y1: Y(o.ref), y2: Y(o.ref), stroke: 'var(--muted)', 'stroke-dasharray': '4 4' })); svg.appendChild(S('text', { x: w - m.r - 2, y: Y(o.ref) - 4, class: 'ax', 'text-anchor': 'end', text: o.refLabel || '' })); }
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + X(p.t).toFixed(1) + ' ' + Y(p.y).toFixed(1)).join('');
+  if (o.mode === 'area') svg.appendChild(S('path', { d: d + 'L' + X(t1) + ' ' + Y(lo) + 'L' + X(t0) + ' ' + Y(lo) + 'Z', fill: 'var(--accent)', 'fill-opacity': 0.14 }));
+  svg.appendChild(S('path', { d, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+  if (o.mode === 'area') pts.forEach(p => svg.appendChild(S('circle', { cx: X(p.t), cy: Y(p.y), r: pts.length > 250 ? 1.9 : 2.6, fill: p.won ? 'var(--ok)' : 'var(--bad)' })));
+  const cross = S('line', { y1: m.t, y2: hh - m.b, stroke: 'var(--muted)', 'stroke-dasharray': '3 3', visibility: 'hidden' }), dot = S('circle', { r: 5, fill: 'var(--accent)', stroke: 'var(--panel)', 'stroke-width': 2, visibility: 'hidden' });
+  const ov = S('rect', { x: m.l, y: m.t, width: w - m.l - m.r, height: hh - m.t - m.b, fill: 'transparent', style: 'touch-action:pan-y' });
+  svg.appendChild(ov);
+  if (o.mode === 'tour') pts.filter(p => p.tour).forEach(p => { const x = X(p.t), y = Y(p.y); svg.appendChild(S('path', { d: 'M' + x + ' ' + (y - 6.5) + 'L' + (x + 6.5) + ' ' + y + 'L' + x + ' ' + (y + 6.5) + 'L' + (x - 6.5) + ' ' + y + 'Z', fill: 'var(--c3)', stroke: 'var(--panel)', 'stroke-width': 1.5, tip: p.tip })); });
+  svg.appendChild(cross); svg.appendChild(dot);
+  function mv(e) {
+    e._h = true; const r = svg.getBoundingClientRect(), tx = t0 + (e.clientX - r.left - m.l) / (w - m.l - m.r) * (t1 - t0);
+    let a = 0, b = pts.length - 1; while (b - a > 1) { const c = (a + b) >> 1; if (pts[c].t < tx) a = c; else b = c; }
+    const p = Math.abs(pts[a].t - tx) < Math.abs(pts[b].t - tx) ? pts[a] : pts[b];
+    cross.setAttribute('x1', X(p.t)); cross.setAttribute('x2', X(p.t)); cross.setAttribute('visibility', 'visible');
+    dot.setAttribute('cx', X(p.t)); dot.setAttribute('cy', Y(p.y)); dot.setAttribute('visibility', 'visible'); showTip(p.tip, e.clientX, e.clientY);
+  }
+  ov.addEventListener('pointermove', mv); ov.addEventListener('pointerdown', mv);
+  ov.addEventListener('pointerleave', () => { cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); hideTip(); });
+}
+
+/* horizontal bars. rows[{label,segs:[{v,color,tip}],txt,tip}] */
+function hbars(host, rows, o) {
+  o = o || {}; if (!rows.length) return empty(host);
+  const box = h('div', 'ch'); host.appendChild(box);
+  const w = boxW(box), lw = w < 460 ? 86 : 118, rw = w < 460 ? 56 : 72, rh = o.rh || 26, top = 4, hh = rows.length * rh + top + (o.ticks ? 22 : 4);
+  const X = lin(0, o.max, lw, w - rw), svg = mkSvg(w, hh, o.label || 'bar chart'); box.appendChild(svg);
+  (o.ticks || []).forEach(v => { svg.appendChild(S('line', { x1: X(v), x2: X(v), y1: top, y2: hh - 20, class: 'grid-l' })); svg.appendChild(S('text', { x: X(v), y: hh - 6, class: 'ax', 'text-anchor': 'middle', text: o.fmtT ? o.fmtT(v) : v })); });
+  rows.forEach((r, i) => {
+    const y = top + i * rh; let acc = 0;
+    svg.appendChild(S('text', { x: lw - 8, y: y + rh / 2 + 4, class: 'lab', 'text-anchor': 'end', text: trunc(r.label, w < 460 ? 12 : 16) }));
+    svg.appendChild(S('rect', { x: lw, y: y + 4, width: w - rw - lw, height: rh - 8, rx: 3, fill: 'var(--soft)', tip: r.tip || '' }));
+    r.segs.forEach(s => { const x0 = X(acc), x1 = X(acc + s.v); acc += s.v; if (x1 > x0) svg.appendChild(S('rect', { x: x0, y: y + 4, width: Math.max(1, x1 - x0), height: rh - 8, rx: 3, fill: s.color, tip: s.tip || r.tip || '' })); });
+    svg.appendChild(S('text', { x: w - rw + 6, y: y + rh / 2 + 4, class: 'lab', text: r.txt }));
+  });
+  if (o.ref != null) { svg.appendChild(S('line', { x1: X(o.ref), x2: X(o.ref), y1: top, y2: top + rows.length * rh, stroke: 'var(--fg)', 'stroke-dasharray': '3 3', 'stroke-opacity': 0.55 })); }
+}
+/* diverging bars around a centre value */
+function divBars(host, rows, o) {
+  if (!rows.length) return empty(host);
+  const box = h('div', 'ch'); host.appendChild(box);
+  const w = boxW(box), lw = w < 460 ? 86 : 118, rw = 8, rh = 24, hh = rows.length * rh + 26, span = o.span;
+  const c = (lw + w - rw) / 2, X = lin(-span, span, lw, w - rw), svg = mkSvg(w, hh, 'diverging bar chart'); box.appendChild(svg);
+  [-span, -span / 2, 0, span / 2, span].forEach(v => { svg.appendChild(S('line', { x1: X(v), x2: X(v), y1: 0, y2: rows.length * rh, class: 'grid-l' })); svg.appendChild(S('text', { x: X(v), y: hh - 7, class: 'ax', 'text-anchor': 'middle', text: (50 + v) + '%' })); });
+  rows.forEach((r, i) => {
+    const y = i * rh, x = X(Math.max(-span, Math.min(span, r.d)));
+    svg.appendChild(S('text', { x: lw - 8, y: y + rh / 2 + 4, class: 'lab', 'text-anchor': 'end', text: trunc(r.label, w < 460 ? 12 : 16) }));
+    svg.appendChild(S('rect', { x: Math.min(c, x), y: y + 4, width: Math.max(2, Math.abs(x - c)), height: rh - 8, rx: 3, fill: r.d >= 0 ? 'var(--ok)' : 'var(--bad)', tip: r.tip }));
+  });
+  svg.appendChild(S('line', { x1: c, x2: c, y1: 0, y2: rows.length * rh, stroke: 'var(--fg)', 'stroke-opacity': 0.6 }));
+}
+/* vertical bars. items[{label,v,n,tip}] with 0-100 axis */
+function vbars(host, items) {
+  const box = h('div', 'ch'); host.appendChild(box);
+  const w = boxW(box), hh = 250, m = { l: 36, r: 6, t: 10, b: 40 }, Y = lin(0, 100, hh - m.b, m.t), bw = (w - m.l - m.r) / items.length;
+  const svg = mkSvg(w, hh, 'win rate by game length'); box.appendChild(svg);
+  [0, 25, 50, 75, 100].forEach(v => { svg.appendChild(S('line', { x1: m.l, x2: w - m.r, y1: Y(v), y2: Y(v), class: 'grid-l', stroke: v === 50 ? 'var(--muted)' : undefined, 'stroke-dasharray': v === 50 ? '4 4' : undefined })); svg.appendChild(S('text', { x: m.l - 6, y: Y(v) + 4, class: 'ax', 'text-anchor': 'end', text: v + '%' })); });
+  items.forEach((it, i) => {
+    const x = m.l + i * bw + bw * 0.16, ww = bw * 0.68, v = it.n ? it.v * 100 : 0;
+    svg.appendChild(S('rect', { x, y: Y(v), width: ww, height: Math.max(0, Y(0) - Y(v)), rx: 3, fill: winCol(it.v), 'fill-opacity': it.n < 5 ? 0.45 : 1, tip: it.tip }));
+    if (it.n) svg.appendChild(S('text', { x: x + ww / 2, y: Y(v) - 5, class: 'lab', 'text-anchor': 'middle', text: pc(it.v) }));
+    svg.appendChild(S('text', { x: x + ww / 2, y: hh - 22, class: 'ax', 'text-anchor': 'middle', text: it.label }));
+    svg.appendChild(S('text', { x: x + ww / 2, y: hh - 8, class: 'ax', 'text-anchor': 'middle', text: it.n + (bw > 62 ? ' games' : '') }));
+  });
+}
+/* heatmap. cell(r,c) -> {fill,tip} */
+function heat(host, rows, cols, cell, o) {
+  o = o || {}; const box = h('div', 'ch'); host.appendChild(box);
+  const w = boxW(box), lw = o.lw || (w < 460 ? 78 : 104), cw = (w - lw - 2) / cols.length, ch = o.ch || 20, hh = rows.length * (ch + 2) + 22;
+  const svg = mkSvg(w, hh, o.label || 'heatmap'); box.appendChild(svg);
+  rows.forEach((rl, r) => {
+    svg.appendChild(S('text', { x: lw - 6, y: r * (ch + 2) + ch / 2 + 4, class: 'lab', 'text-anchor': 'end', text: trunc(rl, w < 460 ? 11 : 15) }));
+    cols.forEach((cl, c) => { const k = cell(r, c); svg.appendChild(S('rect', { x: lw + c * cw + 1, y: r * (ch + 2), width: Math.max(2, cw - 2), height: ch, rx: 3, fill: k.fill, tip: k.tip })); });
+  });
+  const every = o.every || 1; cols.forEach((cl, c) => { if (c % every === 0) svg.appendChild(S('text', { x: lw + c * cw + cw / 2, y: hh - 6, class: 'ax', 'text-anchor': 'middle', text: cl })); });
+}
+function legendEl(items) { const l = h('div', 'legend'); items.forEach(([c, t]) => { const s = h('span'); const i = h('i'); i.style.background = c; s.appendChild(i); s.appendChild(document.createTextNode(t)); l.appendChild(s); }); return l; }
+function winBar(wr, withTxt) { const b = h('div', 'bar'); const i = h('i'); i.style.width = Math.round(wr * 100) + '%'; i.style.background = winCol(wr); b.appendChild(i); b.appendChild(h('b')); return b; }
+function spark(vals, w, hh) {
+  const svg = mkSvg(w, hh, 'rating trend'), lo = Math.min(...vals), hi = Math.max(...vals), X = lin(0, vals.length - 1, 2, w - 2), Y = lin(lo, hi, hh - 4, 4);
+  svg.appendChild(S('path', { d: vals.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join(''), fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2 }));
+  return svg;
+}
+function ring(wr, size) {
+  const svg = mkSvg(size, size, 'win rate gauge'), r = size / 2 - 11, c = 2 * Math.PI * r;
+  svg.appendChild(S('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: 'var(--soft)', 'stroke-width': 14 }));
+  svg.appendChild(S('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: winCol(wr), 'stroke-width': 14, 'stroke-linecap': 'round', 'stroke-dasharray': (c * wr) + ' ' + c, transform: 'rotate(-90 ' + size / 2 + ' ' + size / 2 + ')', tip: 'Win rate\n' + pc(wr) }));
+  svg.appendChild(S('text', { x: size / 2, y: size / 2 + 2, class: 'lab', 'text-anchor': 'middle', style: 'font-size:26px;font-weight:650;font-family:var(--head)', text: pc(wr) }));
+  svg.appendChild(S('text', { x: size / 2, y: size / 2 + 20, class: 'ax', 'text-anchor': 'middle', text: 'win rate' }));
+  return svg;
+}
+function pips(g, n) { const p = h('div', 'pips'); g.slice(-n).forEach(x => { const i = h('i'); i.style.background = x.won ? 'var(--ok)' : 'var(--bad)'; i.setAttribute('data-tip', (x.won ? 'Won' : 'Lost') + ' vs ' + x.opp + '\n' + x.map + ' · ' + fmtD(x.ts)); p.appendChild(i); }); return p; }
+const gameTip = x => fmtD(x.ts) + '\n' + (x.won ? 'Won' : 'Lost') + ' · ' + x.civ + ' vs ' + x.opp + '\n' + x.map + ' · ' + Math.round(x.len) + ' min' + (x.mode === 'tour' ? '\nTournament game' : '');
+const ratingPts = c => c.lad.map((x, i, a) => ({ t: x.ts, y: x.rating, won: x.won, tour: x.mode === 'tour', tip: fmtD(x.ts) + '\nRating ' + num(x.rating) + (i ? ' (' + (x.rating - a[i - 1].rating >= 0 ? '+' : '') + (x.rating - a[i - 1].rating) + ')' : '') + '\n' + (x.won ? 'Won' : 'Lost') + ' ' + x.civ + ' vs ' + x.opp + ' on ' + x.map + (x.mode === 'tour' ? '\nTournament game' : '') }));
+const ladderName = () => ST.view === 'rt' ? 'team ladder' : '1v1 ladder';
+
+/* ============================ section renderers ============================ */
+const R = {};
+const vsGroup = (a, b, unit) => { const d = a - b; return h('div', 's ' + (d >= 0 ? 'up' : 'dn'), (d >= 0 ? '+' : '') + (unit === '%' ? Math.round(d * 100) + ' pts' : Math.round(d)) + ' vs group'); };
+function tile(v, k, sub) { return h('div', 'tile', null, [h('div', 'v', v), h('div', 'k', k), sub]); }
+function subLine(c) { return VIEWS.find(v => v[0] === ST.view)[1] + ' · ' + PERIODS.find(p => p[0] === ST.period)[1] + ' · ' + c.st.n + ' games'; }
+
+R.header = (b, c, o) => {
+  const s = c.st; if (!s.n) return empty(b);
+  const streak = s.cur + (s.curW ? ' win' : ' loss') + (s.cur === 1 ? '' : (s.curW ? 's' : 'es'));
+  const last = c.lad.slice(-60).map(x => x.rating), delta = s.now != null ? s.now - s.first : 0;
+  if (o === 0) {
+    b.appendChild(h('div', 'hero2', null, [h('span', 'avatar big', c.name[0]), h('div', 'grow', null, [h('div', 'nm', c.name), h('div', 'muted', subLine(c)), h('div', null, null, [h('span', 'pill acc', '#' + c.rank + ' of 5 in the group for rating')])]), h('div', 'big', null, [h('div', 'v', s.now != null ? num(s.now) : '-'), h('div', 'muted small', 'Rating now (' + ladderName() + ')')])]));
+    b.appendChild(h('div', 'tiles', null, [
+      tile(s.peak ? num(s.peak.rating) : '-', 'Peak rating', h('div', 's', s.peak ? fmtD(s.peak.ts) : '')),
+      tile(String(s.n), 'Games', h('div', 's', wl(s.w, s.n) + ' (won-lost)')),
+      tile(pc(s.wr), 'Win rate', vsGroup(s.wr, c.gm.wr, '%')),
+      tile(String(s.best), 'Best win streak', h('div', 's', 'in a row')),
+      tile(streak, 'Current streak', h('div', 's', 'latest games')),
+      tile(String(Math.round(s.eapm)), 'eAPM', vsGroup(s.eapm, c.gm.eapm)),
+    ]));
+  } else if (o === 1) {
+    const left = h('div', null, null, [h('div', 'row', null, [h('span', 'avatar', c.name[0]), h('strong', null, '  ' + c.name)]), h('div', 'muted small', subLine(c))]);
+    const big = h('div', null, null, [h('div', 'muted small', 'Rating now'), h('div', null, s.now != null ? num(s.now) : '-')]); big.lastChild.style.cssText = 'font-family:var(--head);font-weight:var(--hw);font-size:46px;line-height:1.1;color:var(--accent);font-variant-numeric:tabular-nums';
+    left.appendChild(big);
+    if (last.length > 1) { const sp = h('div', 'ch'); left.appendChild(sp); requestAnimationFrame(() => sp.appendChild(spark(last, Math.max(160, sp.clientWidth), 54))); }
+    left.appendChild(h('div', 'small ' + (delta >= 0 ? '' : ''), (delta >= 0 ? 'Up ' : 'Down ') + Math.abs(delta) + ' points over this period · peak ' + (s.peak ? num(s.peak.rating) : '-')));
+    const row = (k, vEl, v) => h('div', 'stat-row', null, [h('div', 'k', k), vEl, h('div', 'v', v)]);
+    const wlBar = h('div', 'bar'); const wi = h('i'); wi.style.cssText = 'width:' + pc(s.wr) + ';background:var(--ok)'; wlBar.appendChild(wi);
+    const ebar = h('div', 'bar'); const ei = h('i'); ei.style.cssText = 'width:' + Math.min(100, s.eapm / 1.5) + '%;background:var(--c4)'; ebar.appendChild(ei);
+    const gbar = h('div', 'bar'); const gi = h('i'); gi.style.cssText = 'width:' + Math.min(100, s.n / 5) + '%;background:var(--accent)'; gbar.appendChild(gi);
+    const right = h('div', null, null, [row('Win rate', winBar(s.wr), pc(s.wr)), row('Record', wlBar, wl(s.w, s.n)), row('Games', gbar, String(s.n)), row('Last 10', pips(c.g, 10), c.g.slice(-10).filter(x => x.won).length + '/10'), row('Streaks', h('span', 'small muted', 'Best ' + s.best + ' wins in a row'), streak.split(' ')[0] + (s.curW ? 'W' : 'L')), row('eAPM', ebar, String(Math.round(s.eapm))), row('Avg length', h('span'), Math.round(s.avgLen) + ' min')]);
+    b.appendChild(h('div', 'board', null, [left, right]));
+  } else {
+    const g = h('div', 'gauge', null, [ring(s.wr, 150), h('dl', null, null, [
+      h('dt', null, 'Player'), h('dd', null, c.name), h('dt', null, 'Rating now'), h('dd', null, s.now != null ? num(s.now) : '-'), h('dt', null, 'Peak'), h('dd', null, s.peak ? num(s.peak.rating) : '-'),
+      h('dt', null, 'Games'), h('dd', null, wl(s.w, s.n)), h('dt', null, 'Best streak'), h('dd', null, s.best + ' wins'), h('dt', null, 'Now'), h('dd', null, streak), h('dt', null, 'eAPM'), h('dd', null, String(Math.round(s.eapm)))])]);
+    b.appendChild(g); b.appendChild(h('div', 'subh', 'Last 20 games')); b.appendChild(pips(c.g, 20));
+    b.appendChild(h('p', 'muted small', subLine(c) + ' · #' + c.rank + ' of 5 for rating'));
+  }
+};
+
+R.rating = (b, c, o) => {
+  const pts = ratingPts(c); if (pts.length < 2) return empty(b);
+  b.appendChild(h('p', 'muted small', 'Rating on the ' + ladderName() + ' after each game. Hover or drag across the chart for the exact number.'));
+  lineChart(b, { pts, mode: ['line', 'tour', 'area'][o], label: 'rating over time' });
+  if (o === 1) b.appendChild(legendEl([['var(--c3)', 'Tournament game (' + c.lad.filter(x => x.mode === 'tour').length + ')'], ['var(--accent)', 'Rating']]));
+  if (o === 2) b.appendChild(legendEl([['var(--ok)', 'Win'], ['var(--bad)', 'Loss']]));
+};
+
+function civRows(c) {
+  return [...group(c.g, x => x.civ)].map(([k, a]) => { const r = rec(a); return { civ: k, n: r.n, w: r.w, wr: r.wr, len: a.reduce((s, x) => s + x.len, 0) / a.length }; });
+}
+R.civs = (b, c, o) => {
+  const rows = civRows(c); if (!rows.length) return empty(b);
+  if (o === 0) {
+    const cols = [['civ', 'Civ'], ['n', 'Games'], ['wr', 'Win rate'], ['len', 'Avg length']], k = ST.sort.key, dir = ST.sort.dir;
+    rows.sort((a, z) => (typeof a[k] === 'string' ? a[k].localeCompare(z[k]) : a[k] - z[k]) * dir || z.n - a.n);
+    const tbl = h('table'), tr = h('tr');
+    cols.forEach(([key, lab], i) => { const th = h('th', i ? 'num' + (key === 'len' ? ' hide-sm' : '') : ''); const bt = h('button', null, lab + (key === k ? (dir < 0 ? ' ↓' : ' ↑') : '')); if (key === k) bt.setAttribute('aria-sort', dir < 0 ? 'descending' : 'ascending'); bt.onclick = () => { ST.sort = { key, dir: key === k ? -dir : (key === 'civ' ? 1 : -1) }; renderSec('civs'); }; th.appendChild(bt); tr.appendChild(th); });
+    tbl.appendChild(tr);
+    rows.forEach(r => { const row = h('tr'); row.appendChild(h('td', null, r.civ)); row.appendChild(h('td', 'num', String(r.n))); const td = h('td', 'num'); td.style.minWidth = '130px'; const w = h('div', null, null, [h('div', null, pc(r.wr) + '  (' + wl(r.w, r.n) + ')'), winBar(r.wr)]); w.firstChild.className = 'small'; td.appendChild(w); row.appendChild(td); row.appendChild(h('td', 'num hide-sm', Math.round(r.len) + ' min')); tbl.appendChild(row); });
+    b.appendChild(h('div', 'scroll', null, [tbl])); b.appendChild(h('p', 'muted small', 'Click a column heading to sort. The tick in the bar is 50%.'));
+  } else if (o === 1) {
+    const box = h('div', 'ch'); b.appendChild(box);
+    const w = boxW(box), hh = w < 480 ? 300 : 340, m = { l: 40, r: 14, t: 14, b: 34 }, mx = Math.max(...rows.map(r => r.n)) * 1.08;
+    const X = lin(0, mx, m.l, w - m.r), Y = lin(0, 100, hh - m.b, m.t), svg = mkSvg(w, hh, 'civ bubble chart'); box.appendChild(svg);
+    [0, 25, 50, 75, 100].forEach(v => { svg.appendChild(S('line', { x1: m.l, x2: w - m.r, y1: Y(v), y2: Y(v), class: 'grid-l', stroke: v === 50 ? 'var(--muted)' : undefined, 'stroke-dasharray': v === 50 ? '4 4' : undefined })); svg.appendChild(S('text', { x: m.l - 6, y: Y(v) + 4, class: 'ax', 'text-anchor': 'end', text: v + '%' })); });
+    niceTicks(0, mx, 5).forEach(v => svg.appendChild(S('text', { x: X(v), y: hh - 16, class: 'ax', 'text-anchor': 'middle', text: v })));
+    svg.appendChild(S('text', { x: (m.l + w - m.r) / 2, y: hh - 2, class: 'ax', 'text-anchor': 'middle', text: 'Games played →' }));
+    const top = new Set([...rows].sort((a, z) => z.n - a.n).slice(0, 6).concat([...rows].filter(r => r.n >= 6).sort((a, z) => z.wr - a.wr).slice(0, 2)).map(r => r.civ));
+    rows.forEach(r => svg.appendChild(S('circle', { cx: X(r.n), cy: Y(r.wr * 100), r: 5 + Math.min(10, r.len / 5), fill: winCol(r.wr), 'fill-opacity': 0.62, stroke: winCol(r.wr), 'stroke-width': 1.5, tip: r.civ + '\n' + r.n + ' games, ' + pc(r.wr) + ' won\nAverage game ' + Math.round(r.len) + ' min' })));
+    rows.filter(r => top.has(r.civ)).forEach(r => svg.appendChild(S('text', { x: X(r.n), y: Y(r.wr * 100) - 14, class: 'ax', 'text-anchor': 'middle', text: r.civ, style: 'fill:var(--fg)', 'pointer-events': 'none' })));
+    b.appendChild(legendEl([['var(--ok)', 'Above 50% wins'], ['var(--bad)', 'Below 50%'], ['var(--muted)', 'Bubble size = average game length']]));
+  } else {
+    const top = rows.sort((a, z) => z.n - a.n).slice(0, 10), mx = top[0].n;
+    hbars(b, top.map(r => ({ label: r.civ, txt: pc(r.wr), tip: r.civ + '\n' + wl(r.w, r.n) + ' in ' + r.n + ' games (' + pc(r.wr) + ')', segs: [{ v: r.w, color: 'var(--ok)' }, { v: r.n - r.w, color: 'var(--bad)' }] })), { max: mx, ticks: niceTicks(0, mx, 4), label: 'top 10 civs' });
+    b.appendChild(legendEl([['var(--ok)', 'Wins'], ['var(--bad)', 'Losses'], ['var(--muted)', 'Bar length = games played; number = win rate']]));
+  }
+};
+
+R.maps = (b, c, o) => {
+  const gm = [...group(c.g, x => x.map)].map(([k, a]) => ({ map: k, ...rec(a), a })).sort((a, z) => z.n - a.n); if (!gm.length) return empty(b);
+  if (o === 0) {
+    hbars(b, gm.map(r => ({ label: r.map, txt: pc(r.wr), tip: r.map + '\n' + wl(r.w, r.n) + ' in ' + r.n + ' games (' + pc(r.wr) + ')', segs: [{ v: r.wr * 100, color: winCol(r.wr) }] })), { max: 100, ref: 50, ticks: [0, 25, 50, 75, 100], fmtT: v => v + '%', label: 'win rate by map' });
+    b.appendChild(h('p', 'muted small', 'Maps sorted by games played, most played first. The dashed line is 50%.'));
+  } else {
+    const months = []; for (let i = 11; i >= 0; i--) { const d = new Date(TODAY); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - i); months.push({ y: d.getUTCFullYear(), m: d.getUTCMonth() }); }
+    const lab = months.map(x => new Date(Date.UTC(x.y, x.m, 1)).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }));
+    heat(b, gm.map(x => x.map), months, (r, ci) => {
+      const mm = months[ci], a = gm[r].a.filter(x => { const d = new Date(x.ts); return d.getUTCFullYear() === mm.y && d.getUTCMonth() === mm.m; }), q = rec(a);
+      return { fill: a.length ? heatCol(q.wr) : 'var(--soft)', tip: gm[r].map + ' · ' + lab[ci] + ' ' + mm.y + '\n' + (a.length ? wl(q.w, q.n) + ' (' + pc(q.wr) + ' won)' : 'No games') };
+    }, { every: 1, label: 'map by month heat strip', ch: 20 });
+    b.appendChild(legendEl([['var(--ok)', 'More wins'], ['var(--soft)', 'About 50% or no games'], ['var(--bad)', 'More losses']]));
+    b.appendChild(h('p', 'muted small', 'Last 12 months. Each cell is one map in one month; the colour is the win rate that month.'));
+  }
+};
+
+R.matchups = (b, c, o) => {
+  const minN = c.g.length > 150 ? 5 : 3;
+  const rows = [...group(c.g, x => x.opp)].map(([k, a]) => ({ civ: k, ...rec(a) })).filter(r => r.n >= minN); if (rows.length < 4) return empty(b);
+  rows.sort((a, z) => z.wr - a.wr || z.n - a.n);
+  b.appendChild(h('p', 'muted small', 'Only opponent civs met at least ' + minN + ' times are shown.'));
+  if (o === 0) {
+    const mk = (title, arr, cls) => { const ul = h('ul', 'list'); arr.forEach(r => ul.appendChild(h('li', null, null, [h('span', 'grow', 'vs ' + r.civ), h('span', 'small muted', wl(r.w, r.n)), h('span', 'pill ' + cls, pc(r.wr))]))); return h('div', null, null, [h('div', 'subh', title), ul]); };
+    b.appendChild(h('div', 'grid2', null, [mk('Best matchups', rows.slice(0, 5), 'ok'), mk('Toughest matchups', rows.slice(-5).reverse(), 'bad')]));
+  } else {
+    const use = rows.length > 16 ? rows.slice(0, 8).concat(rows.slice(-8)) : rows;
+    divBars(b, use.map(r => ({ label: r.civ, d: (r.wr - 0.5) * 100, tip: 'vs ' + r.civ + '\n' + wl(r.w, r.n) + ' in ' + r.n + ' games (' + pc(r.wr) + ')' })), { span: 50 });
+    b.appendChild(h('p', 'muted small', 'Bars right of the middle line are matchups you win more than half the time; left are ones you lose more.'));
+  }
+};
+
+R.length = (b, c, o) => {
+  if (!c.g.length) return empty(b);
+  const doLen = () => {
+    const bk = [[0, 10, '<10'], [10, 20, '10-20'], [20, 30, '20-30'], [30, 40, '30-40'], [40, 50, '40-50'], [50, 999, '50+']];
+    vbars(b, bk.map(([a, z, l]) => { const q = rec(c.g.filter(x => x.len >= a && x.len < z)); return { label: l, v: q.wr, n: q.n, tip: l + ' min games\n' + wl(q.w, q.n) + ' (' + (q.n ? pc(q.wr) : 'no games') + ')' }; }));
+    b.appendChild(h('p', 'muted small', 'Win rate by how long the game lasted, in minutes. Faded bars have fewer than 5 games.'));
+  };
+  const doHeat = () => {
+    const cnt = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => ({ n: 0, w: 0 })));
+    c.g.forEach(x => { const k = cnt[x.wd][x.hour]; k.n++; if (x.won) k.w++; });
+    const mx = Math.max(1, ...cnt.flat().map(k => k.n));
+    heat(b, DAYS, Array.from({ length: 24 }, (_, i) => String(i)), (r, ci) => { const k = cnt[r][ci]; return { fill: k.n ? 'color-mix(in srgb, var(--accent) ' + Math.round(15 + k.n / mx * 85) + '%, var(--soft))' : 'var(--soft)', tip: DAYS[r] + ' ' + String(ci).padStart(2, '0') + ':00\n' + k.n + ' games' + (k.n ? ', ' + k.w + ' won (' + pc(k.w / k.n) + ')' : '') }; }, { lw: 34, ch: 18, every: 3, label: 'activity heatmap' });
+    b.appendChild(h('p', 'muted small', 'When games are played (hour of day, UTC). Darker means more games.'));
+  };
+  if (o === 0) doLen(); else if (o === 1) doHeat(); else { b.appendChild(h('div', 'subh', 'Win rate by game length')); doLen(); b.appendChild(h('div', 'subh', 'When you play')); doHeat(); }
+};
+
+function donut(host, parts, total) {
+  const size = 170, svg = mkSvg(size, size, 'openings donut'), cx = size / 2, R1 = 78, R0 = 48; let a = -Math.PI / 2;
+  const P = (r, t) => (cx + r * Math.cos(t)).toFixed(2) + ' ' + (cx + r * Math.sin(t)).toFixed(2);
+  parts.forEach(p => { const a1 = a + p.v / total * 2 * Math.PI - 0.02; if (p.v) svg.appendChild(S('path', { d: 'M' + P(R1, a) + 'A' + R1 + ' ' + R1 + ' 0 ' + ((a1 - a) > Math.PI ? 1 : 0) + ' 1 ' + P(R1, a1) + 'L' + P(R0, a1) + 'A' + R0 + ' ' + R0 + ' 0 ' + ((a1 - a) > Math.PI ? 1 : 0) + ' 0 ' + P(R0, a) + 'Z', fill: p.color, tip: p.tip })); a += p.v / total * 2 * Math.PI; });
+  svg.appendChild(S('text', { x: cx, y: cx + 4, class: 'lab', 'text-anchor': 'middle', style: 'font-size:22px;font-weight:650', text: total })); svg.appendChild(S('text', { x: cx, y: cx + 20, class: 'ax', 'text-anchor': 'middle', text: 'replays' }));
+  host.appendChild(svg);
+}
+function histo(host, vals, gm, lo, hi, step, name) {
+  host.appendChild(h('h4', null, name)); if (vals.length < 3) return empty(host, 'Not enough replays');
+  const box = h('div', 'ch'); host.appendChild(box); const w = boxW(box), hh = 170, m = { l: 26, r: 8, t: 14, b: 24 }, nb = Math.ceil((hi - lo) / step), bins = Array(nb).fill(0);
+  vals.forEach(v => { bins[Math.max(0, Math.min(nb - 1, Math.floor((v - lo) / step)))]++; });
+  const mean = vals.reduce((a, x) => a + x, 0) / vals.length, X = lin(lo, hi, m.l, w - m.r), Y = lin(0, Math.max(...bins), hh - m.b, m.t), svg = mkSvg(w, hh, name + ' distribution'); box.appendChild(svg);
+  svg.appendChild(S('line', { x1: m.l, x2: w - m.r, y1: hh - m.b, y2: hh - m.b, class: 'grid-l' }));
+  bins.forEach((n, i) => svg.appendChild(S('rect', { x: X(lo + i * step) + 1, y: Y(n), width: Math.max(1, X(lo + (i + 1) * step) - X(lo + i * step) - 2), height: Y(0) - Y(n), rx: 2, fill: 'var(--accent)', 'fill-opacity': 0.8, tip: fmtT(lo + i * step) + ' to ' + fmtT(lo + (i + 1) * step) + '\n' + n + ' games' })));
+  niceTicks(lo, hi, 5).forEach(v => svg.appendChild(S('text', { x: X(v), y: hh - 8, class: 'ax', 'text-anchor': 'middle', text: Math.round(v) + 'm' })));
+  const mk = (v, col, dash, lab, dy) => { svg.appendChild(S('line', { x1: X(v), x2: X(v), y1: m.t - 4, y2: hh - m.b, stroke: col, 'stroke-width': 2, 'stroke-dasharray': dash, tip: lab + ' ' + fmtT(v) })); };
+  mk(mean, 'var(--c1)', '', 'You'); if (gm != null) mk(gm, 'var(--fg)', '4 3', 'Group average');
+  host.appendChild(legendEl([['var(--c1)', 'You, average ' + fmtT(mean)], ['var(--fg)', 'Group ' + (gm != null ? fmtT(gm) : '-')]]));
+}
+R.strategy = (b, c, o) => {
+  const rep = c.rep; if (rep.length < 5) return empty(b, 'Not enough replays in this view and period.');
+  b.appendChild(h('p', 'muted small', 'Read from replays: ' + rep.length + ' of ' + c.g.length + ' games have one.'));
+  if (o === 0) {
+    const gr = [...group(rep, x => x.op)].map(([k, a]) => ({ k, ...rec(a) })).sort((a, z) => z.n - a.n), cols = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)'], box = h('div', 'ch');
+    donut(box, gr.map((r, i) => ({ v: r.n, color: cols[i], tip: OPENINGS[r.k] + '\n' + r.n + ' games (' + pc(r.n / rep.length) + ')\nWon ' + pc(r.wr) })), rep.length);
+    const ll = h('div', 'leg-list'); gr.forEach((r, i) => { const ic = h('i'); ic.style.background = cols[i]; ll.appendChild(h('div', 'r', null, [ic, h('span', null, OPENINGS[r.k]), h('span', 'muted small', pc(r.n / rep.length) + ' of games'), h('span', 'pill ' + (r.wr >= 0.5 ? 'ok' : 'bad'), pc(r.wr) + ' won')])); });
+    b.appendChild(h('div', 'split', null, [box, ll]));
+  } else if (o === 1) {
+    const hs = h('div', 'hist3'); b.appendChild(hs);
+    [['Feudal Age reached', 'feudal', 8, 14, 0.5], ['Castle Age reached', 'castle', 14, 26, 1], ['Imperial Age reached', 'imp', 26, 50, 2]].forEach(([t, k, lo, hi, st]) => { const d = h('div'); hs.appendChild(d); histo(d, rep.map(x => x[k]).filter(v => v != null), c.gm[k], lo, hi, st, t); });
+    b.appendChild(h('p', 'muted small', 'How many games reached each age at which minute. Further left is faster. Imperial only counts games that lasted long enough to get there.'));
+  } else {
+    const mix = a => ARMY.map((_, k) => a.length ? a.reduce((s, x) => s + x.mix[k], 0) / a.length : 0);
+    const rows = [['You, all games', mix(rep)], ['You, in wins', mix(rep.filter(x => x.won))], ['You, in losses', mix(rep.filter(x => !x.won))], ['Group average', c.gm.mix]], cols = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)'];
+    hbars(b, rows.map(([l, m]) => ({ label: l, txt: '', tip: l, segs: m.map((v, k) => ({ v: v * 100, color: cols[k], tip: l + '\n' + ARMY[k] + ' ' + Math.round(v * 100) + '% of army' })) })), { max: 100, rh: 34, ticks: [0, 25, 50, 75, 100], fmtT: v => v + '%', label: 'army mix' });
+    b.appendChild(legendEl(ARMY.map((a, k) => [cols[k], a])));
+  }
+};
+
+R.form = (b, c, o) => {
+  const g = c.g; if (g.length < 10) return empty(b);
+  if (o === 0) {
+    const l = g.slice(-20), r = rec(l), box = h('div', 'ch'); b.appendChild(box);
+    const w = boxW(box), gap = 4, sz = Math.min(34, (w - gap * 19) / 20), svg = mkSvg(w, sz + 6, 'last 20 games'); box.appendChild(svg);
+    l.forEach((x, i) => { svg.appendChild(S('rect', { x: i * (sz + gap), y: 2, width: sz, height: sz, rx: 4, fill: x.won ? 'var(--ok)' : 'var(--bad)', tip: gameTip(x) })); if (sz > 15) svg.appendChild(S('text', { x: i * (sz + gap) + sz / 2, y: 2 + sz / 2 + 4, 'text-anchor': 'middle', style: 'fill:#fff;font-size:12px;font-weight:700;pointer-events:none', text: x.won ? 'W' : 'L' })); });
+    b.appendChild(h('p', null, 'Last 20: ' + wl(r.w, r.n) + ' (' + pc(r.wr) + '), against ' + pc(c.st.wr) + ' over the whole period. Oldest on the left, newest on the right.'));
+    const ul = h('ul', 'list'); g.slice(-6).reverse().forEach(x => ul.appendChild(h('li', null, null, [h('span', 'pill ' + (x.won ? 'ok' : 'bad'), x.won ? 'Won' : 'Lost'), h('span', 'grow', x.civ + ' vs ' + x.opp), h('span', 'small muted', x.map + ' · ' + Math.round(x.len) + ' min')])));
+    b.appendChild(h('div', 'subh', 'Latest games')); b.appendChild(ul);
+  } else {
+    const win = 10, pts = []; g.forEach((x, i) => { if (i >= win - 1) { const s = g.slice(i - win + 1, i + 1), q = rec(s); pts.push({ t: x.ts, y: q.wr * 100, tip: fmtD(x.ts) + '\nLast 10 games: ' + wl(q.w, 10) + '\n' + Math.round(q.wr * 100) + '% won' }); } });
+    b.appendChild(h('p', 'muted small', 'Win rate over the previous 10 games, after each game. The dashed line is 50%.'));
+    lineChart(b, { pts, yMin: 0, yMax: 100, fmtY: v => v + '%', ref: 50, refLabel: '50%', label: 'rolling win rate' });
+  }
+};
+
+R.team = (b, c, o) => {
+  const tg = filt(c.pi, 'rt', ST.period); if (tg.length < 8) return empty(b, 'Not enough ranked team games in this period.');
+  b.appendChild(h('p', 'muted small', 'Uses all ' + tg.length + ' ranked team games in the chosen period, whatever view is selected above.'));
+  if (o === 0) {
+    const rows = [...group(tg, x => x.tm)].map(([k, a]) => ({ k, ...rec(a) })).sort((a, z) => z.n - a.n);
+    hbars(b, rows.map(r => ({ label: 'With ' + r.k, txt: pc(r.wr), tip: 'Playing with ' + r.k + '\n' + wl(r.w, r.n) + ' in ' + r.n + ' games (' + pc(r.wr) + ')', segs: [{ v: r.wr * 100, color: winCol(r.wr) }] })), { max: 100, ref: 50, ticks: [0, 25, 50, 75, 100], fmtT: v => v + '%', rh: 34, label: 'win rate by teammate' });
+  } else {
+    const minN = tg.length > 80 ? 3 : 2, rows = [...group(tg, x => x.civ + ' + ' + x.tmCiv)].map(([k, a]) => ({ k, ...rec(a) })).filter(r => r.n >= minN).sort((a, z) => z.wr - a.wr || z.n - a.n).slice(0, 8);
+    if (!rows.length) return empty(b);
+    const tbl = h('table'), tr = h('tr', null, null, [h('th', null, 'You + teammate civ'), h('th', 'num', 'Games'), h('th', 'num', 'Win rate')]); tbl.appendChild(tr);
+    rows.forEach(r => { const td = h('td', 'num'); td.style.minWidth = '120px'; td.appendChild(h('div', 'small', pc(r.wr))); td.appendChild(winBar(r.wr)); tbl.appendChild(h('tr', null, null, [h('td', null, r.k), h('td', 'num', String(r.n) + ' (' + wl(r.w, r.n) + ')'), td])); });
+    b.appendChild(h('div', 'scroll', null, [tbl])); b.appendChild(h('p', 'muted small', 'Civ pairs played together at least ' + minN + ' times, best win rate first.'));
+  }
+};
+
+/* ============================ page assembly ============================ */
+const secEls = {};
+function buildSections() {
+  const host = document.getElementById('sections'); host.textContent = '';
+  SECS.forEach((s, i) => {
+    const sw = h('span', 'seg2'); sw.setAttribute('role', 'group'); sw.setAttribute('aria-label', 'Options for ' + s.title);
+    s.opts.forEach((name, k) => { const bt = h('button', null, 'ABC'[k]); bt.title = name; bt.setAttribute('data-sec', s.id); bt.setAttribute('data-opt', k); bt.onclick = () => { ST.opt[s.id] = k; renderSec(s.id); renderDrawer(); }; sw.appendChild(bt); });
+    const body = h('div', 'body'), nm = h('p', 'optname');
+    const card = h('section', 'card sec', null, [h('div', 'head', null, [h('h2', null, null, [h('span', 'n', String(i + 1)), document.createTextNode(s.title)]), h('span', 'optsw', null, [h('span', 'small muted', 'Option'), sw])]), nm, body]);
+    card.id = 'sec-' + s.id; host.appendChild(card); secEls[s.id] = { card, sw, nm, body };
+  });
+}
+let CTX = null;
+function renderSec(id) {
+  const s = SECS.find(x => x.id === id), e = secEls[id], o = ST.opt[id];
+  e.sw.querySelectorAll('button').forEach((bt, k) => bt.setAttribute('aria-pressed', k === o ? 'true' : 'false'));
+  e.nm.textContent = 'Option ' + 'ABC'[o] + ': ' + s.opts[o];
+  e.body.textContent = ''; hideTip();
+  try { R[id](e.body, CTX, o); } catch (err) { e.body.appendChild(h('div', 'empty', 'This chart failed: ' + err.message)); console.error(err); }
+}
+function renderAll() { CTX = ctx(); renderFilters(); SECS.forEach(s => renderSec(s.id)); }
+function renderFilters() {
+  const f = document.getElementById('filters'); f.textContent = '';
+  const row = (k, items, cur, set, withAv) => { const sn = h('div', 'subnav'); items.forEach(([id, lab]) => { const bt = h('button', null, lab); bt.setAttribute('aria-current', id === cur ? 'true' : 'false'); bt.onclick = () => { set(id); renderAll(); }; sn.appendChild(bt); }); f.appendChild(h('div', 'row', null, [h('span', 'k', k), sn])); };
+  row('Player', PLAYERS.map((p, i) => [i, p]), ST.player, v => { ST.player = v; });
+  row('View', VIEWS, ST.view, v => { ST.view = v; });
+  row('Period', PERIODS, ST.period, v => { ST.period = v; });
+}
+
+/* ============================ choices drawer ============================ */
+const drawer = document.getElementById('drawer'), scrim = document.getElementById('scrim');
+function keptN() { return SECS.filter(s => ST.keep[s.id]).length; }
+function renderDrawer() {
+  document.getElementById('openChoices').textContent = 'Your choices (' + keptN() + '/' + SECS.length + ')';
+  if (drawer.hidden) return; const keepScroll = drawer.querySelector('.body') ? drawer.querySelector('.body').scrollTop : 0;
+  drawer.textContent = '';
+  const x = h('button', 'btn', 'Close'); x.onclick = closeDrawer;
+  drawer.appendChild(h('header', null, null, [h('h3', null, 'Your choices'), x]));
+  const body = h('div', 'body'); drawer.appendChild(body);
+  SECS.forEach((s, i) => {
+    const t = h('button', 'toggle', ST.keep[s.id] ? 'Keep' : 'Drop'); t.setAttribute('aria-pressed', ST.keep[s.id]); t.onclick = () => { ST.keep[s.id] = !ST.keep[s.id]; renderDrawer(); };
+    const ta = h('textarea'); ta.placeholder = 'Notes on this section'; ta.value = ST.notes[s.id]; ta.setAttribute('aria-label', 'Notes for ' + s.title); ta.oninput = () => { ST.notes[s.id] = ta.value; };
+    const it = h('div', 'item' + (ST.keep[s.id] ? '' : ' dropped'), null, [h('div', 't', null, [h('b', null, (i + 1) + '. ' + s.title), t]), h('div', 'small muted', 'Option ' + 'ABC'[ST.opt[s.id]] + ': ' + s.opts[ST.opt[s.id]]), ta]);
+    body.appendChild(it);
+  });
+  body.scrollTop = keepScroll;
+  const out = h('textarea'); out.id = 'promptOut'; out.readOnly = true; out.placeholder = 'Press Generate prompt'; out.value = ST.prompt;
+  const gen = h('button', 'btn primary', 'Generate prompt'), cp = h('button', 'btn', 'Copy'), msg = h('span', 'small muted');
+  gen.id = 'genPrompt'; cp.id = 'copyPrompt';
+  gen.onclick = () => { ST.prompt = buildPrompt(); out.value = ST.prompt; msg.textContent = ''; };
+  cp.onclick = () => { if (!out.value) { ST.prompt = buildPrompt(); out.value = ST.prompt; } const done = () => { msg.textContent = 'Copied'; }; const fb = () => { out.select(); try { document.execCommand('copy'); done(); } catch (e) { msg.textContent = 'Press Ctrl+C to copy the selected text'; } }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(out.value).then(done, fb); else fb(); };
+  drawer.appendChild(h('footer', null, null, [h('div', 'btns', null, [gen, cp, msg]), out]));
+}
+function buildPrompt() {
+  const kept = SECS.filter(s => ST.keep[s.id]), dropped = SECS.filter(s => !ST.keep[s.id]), L = [];
+  L.push('Rebuild the "Players & profiles" tab of the AoE2 tournament site to match mockups/profiles-prototype.html, using my choices below.');
+  L.push('Visual style: ' + { classic: 'Classic AoE', clean: 'Clean', dark: 'Dark' }[ST.style] + '.');
+  L.push('Every section responds to the player picker, the view (All games / Ranked 1v1 / Ranked team / Unranked / Tournament) and the period (All time / Last year / Last 6 months). Charts are inline SVG with a tooltip on hover or tap, and must work at phone width.');
+  L.push(''); L.push('Sections to keep (' + kept.length + '), in this order:');
+  kept.forEach((s, i) => { L.push((i + 1) + '. ' + s.title + ' - Option ' + 'ABC'[ST.opt[s.id]] + ' (' + s.opts[ST.opt[s.id]] + ')' + (ST.notes[s.id].trim() ? '. Notes: ' + ST.notes[s.id].trim().replace(/\s+/g, ' ') : '')); });
+  L.push(''); L.push(dropped.length ? 'Sections to drop:' : 'Sections to drop: none.');
+  dropped.forEach(s => L.push('- ' + s.title + (ST.notes[s.id].trim() ? ' (notes: ' + ST.notes[s.id].trim().replace(/\s+/g, ' ') + ')' : '')));
+  return L.join('\n');
+}
+function openDrawer() { drawer.hidden = false; scrim.hidden = false; renderDrawer(); }
+function closeDrawer() { drawer.hidden = true; scrim.hidden = true; }
+document.getElementById('openChoices').onclick = openDrawer; scrim.onclick = closeDrawer;
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !drawer.hidden) closeDrawer(); });
+
+/* style switch + boot */
+const styleSeg = document.getElementById('styleSeg');
+[['classic', 'Classic AoE'], ['clean', 'Clean'], ['dark', 'Dark']].forEach(([id, lab]) => { const bt = h('button', null, lab); bt.setAttribute('aria-pressed', id === ST.style); bt.onclick = () => { ST.style = id; document.getElementById('app').setAttribute('data-style', id); styleSeg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === bt)); }; styleSeg.appendChild(bt); });
+buildSections(); renderAll(); renderDrawer();
+let lastW = innerWidth, rt = null;
+addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; renderAll(); } }, 120); });
+</script>
+</body>
+</html>

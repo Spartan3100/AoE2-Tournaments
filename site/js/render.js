@@ -72,15 +72,48 @@
   const P = () => dash.params();
   const tabs = [...document.querySelectorAll('.tt-tabs button')];
   let current = 'home';
+  // main sections (header, and the bottom bar on phones); each holds the pages whose tab has data-in = that section
+  const sectionOf = (id) => (tabs.find((b) => b.dataset.tab === id) || {}).dataset?.in || 'home';
+  const lastIn = {};
   function show(id, link) {
     current = id;
-    tabs.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === id)));
+    const sec = sectionOf(id);
+    lastIn[sec] = id;
+    tabs.forEach((b) => { b.setAttribute('aria-selected', String(b.dataset.tab === id)); b.hidden = b.dataset.in !== sec; });
+    el('tab-home').closest('.tt-tabs').classList.toggle('single', tabs.filter((b) => !b.hidden).length < 2);
+    document.querySelectorAll('[data-section]').forEach((b) => b.setAttribute('aria-current', b.dataset.section === sec ? 'page' : 'false'));
     document.querySelectorAll('.tt-page').forEach((p) => { p.hidden = p.id !== id; });
-    if (link) dash.setLink(id);
+    el('t-bar').hidden = !['home', 'tournament'].includes(sec);
+    el('headline').hidden = sec !== 'tournament';
+    el('account').open = false;
+    if (link) { dash.setLink(id); window.scrollTo(0, 0); }
     draw();
   }
+  // admin.js says whether the signed-in person is an organizer; only then is there an Admin section
+  window.TT_syncAdmin = (org) => { el('section-admin').hidden = !org; el('account-admin').hidden = !org; };
   tabs.forEach((b) => b.addEventListener('click', () => show(b.dataset.tab, true)));
+  document.querySelectorAll('[data-section]').forEach((b) => b.addEventListener('click', () => {
+    const sec = b.dataset.section;
+    show(lastIn[sec] || (tabs.find((t) => t.dataset.in === sec) || {}).dataset?.tab || 'home', true);
+  }));
+  el('brand').addEventListener('click', (e) => { e.preventDefault(); show('home', true); });
+  el('account-admin').addEventListener('click', () => show('admin', true));
   window.TT_show = show;
+
+  // ---------------------------------------------------------------- the look (Classic AoE, Clean & light, Dark & gold)
+  // index.html applies the saved one before drawing; backend.js keeps it with the account, so it follows you when you sign in
+  const THEMES = ['classic', 'clean', 'dark'];
+  function setTheme(t, save) {
+    if (!THEMES.includes(t)) return;
+    if (t === 'classic') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+    try { localStorage.setItem('tt-theme', t); } catch (e) { /* storage blocked */ }
+    document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim() || '#8c2f1f';
+    el('theme-pick').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.theme === t)));
+    if (save && window.TT_BACKEND && window.TT_BACKEND.saveTheme) window.TT_BACKEND.saveTheme(t);
+  }
+  window.TT_THEME = { set: setTheme, get: () => document.documentElement.dataset.theme || 'classic' };
+  el('theme-pick').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => setTheme(b.dataset.theme, true)));
+  setTheme(window.TT_THEME.get(), false);
 
   el('check-badge').addEventListener('click', () => show('check', true));
   const tPick = el('t-pick');
@@ -239,7 +272,7 @@
       const read = new Set(ana.data.filter((a) => a.player === player && mine.has(String(a.match_id))).map((a) => String(a.match_id)));
       const gap = mine.size - read.size;
       cov.hidden = !gap;
-      cov.textContent = gap ? `⚠ Strategy figures below come from ${num(read.size)} of ${num(mine.size)} games in this view. The other ${num(gap)} have no replay that could be read, so their openings, ages and armies are unknown (their results still count in the figures above). Match review lists which.` : '';
+      cov.textContent = gap ? `⚠ Strategy figures below come from ${num(read.size)} of ${num(mine.size)} games in this view. The other ${num(gap)} have no replay that could be read, so their openings, ages and armies are unknown (their results still count in the figures above). Games lists which.` : '';
     }
 
     // headline figures
@@ -447,7 +480,8 @@
 
   // ---------------------------------------------------------------- match review
   const rvPlayer = el('rv-player'), rvType = el('rv-type'), rvReplay = el('rv-replay');
-  rvPlayer.addEventListener('change', () => dash.setParams({ rp: rvPlayer.value || null }));
+  // players shown in Games: all by default, or any set of them (?rp=A,B)
+  const rvPicked = () => String(P().rp || '').split(',').filter(Boolean);
   rvType.addEventListener('change', () => dash.setParams({ rt: rvType.value || null }));
   rvReplay.addEventListener('change', () => dash.setParams({ rr: rvReplay.value || null }));
   const appVer = () => { const d = dash.data('helper_app'); return d.status === 'ok' && d.data[0] ? String(d.data[0].version) : ''; };
@@ -592,11 +626,71 @@
       if (p === 'granted') { folderState.perm = p; drawFolder(true); folderRun(false); }
     }
   }
+  // "Upload a game" (header, and Upload in the phone's bottom bar): any replays, each matched to the signed-in player's
+  // game without a replay by when the file was saved (= when the game ended), like the replay folder
+  const upSheet = el('upload-sheet'), upFiles = el('upload-files'), upList = el('upload-list'), upMsg = el('upload-msg'), upSend = el('upload-send');
+  let upPairs = [];
+  // datasets load when first asked for; the sheet can open before Games ever has
+  const loaded = async (id) => { const t0 = Date.now(); while (dash.data(id).status === 'loading' && Date.now() - t0 < 15000) await new Promise((r) => setTimeout(r, 200)); return dash.data(id); };
+  function openUpload() {
+    dash.data('review_list');
+    upSheet.hidden = false; upFiles.value = ''; upList.replaceChildren(); upPairs = []; upSend.disabled = true;
+    const up = window.TT_UPLOAD;
+    upMsg.textContent = !up || !up.can() ? 'Players and organizers can upload games.' : !ME.player ? 'First choose who you are (your account menu, top right).' : '';
+    upFiles.disabled = !up || !up.can() || !ME.player;
+    el('upload-folder').hidden = !(window.TT_FOLDER && TT_FOLDER.supported);
+    upFiles.focus();
+  }
+  const closeUpload = () => { upSheet.hidden = true; };
+  el('upload-open').addEventListener('click', openUpload);
+  el('upload-open-2').addEventListener('click', openUpload);
+  el('upload-close').addEventListener('click', closeUpload);
+  upSheet.addEventListener('click', (e) => { if (e.target === upSheet) closeUpload(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !upSheet.hidden) closeUpload(); });
+  el('upload-folder').addEventListener('click', () => { closeUpload(); show('review', true); setTimeout(() => el('rv-folder-card').scrollIntoView({ behavior: 'smooth' }), 50); });
+  upFiles.addEventListener('change', async () => {
+    upMsg.textContent = 'Matching to your games…';
+    const list = await loaded('review_list');
+    if (list.status !== 'ok') { upMsg.textContent = 'Couldn’t load your games to match against. Try again in a moment.'; return; }
+    const files = [...upFiles.files].map((f) => ({ name: f.name, lastModified: f.lastModified, handle: f }));
+    const wanted = list.status === 'ok' ? folderWanted(list.data) : [];
+    let claimed = new Set();
+    try { claimed = await window.TT_UPLOAD.claimed(); } catch (e) { /* shown as unmatched below */ }
+    upPairs = window.TT_FOLDER.match(files, wanted.filter((w) => !claimed.has(w.match_id)));
+    const byName = new Map(upPairs.map((p) => [p.file.name, p.want]));
+    const games = new Map(list.status === 'ok' ? list.data.map((r) => [r.match_id, r]) : []);
+    upList.replaceChildren(...files.map((f) => {
+      const w = byName.get(f.name), g = w && games.get(w.match_id);
+      const li = mk('li', w ? '' : 'tt-warn');
+      li.append(mk('b', '', f.name), mk('div', 'sub', w ? `${g ? `${d3.utcFormat('%b %-d')(new Date(g.started))} · ${g.type} · ${g.map}` : 'a game of yours'}: ${g && g.replay === 'norecord' ? 'missing from Microsoft’s records' : 'no replay on the site yet'}`
+        : 'No game of yours without a replay matches when this was played (it may already have one).'));
+      return li;
+    }));
+    upSend.disabled = !upPairs.length;
+    upMsg.textContent = files.length ? `${upPairs.length} of ${files.length} matched to a game.` : '';
+  });
+  upSend.addEventListener('click', async () => {
+    upSend.disabled = true;
+    let ok = 0;
+    const errs = [];
+    for (const p of upPairs) {
+      upMsg.textContent = `Uploading ${ok + 1} of ${upPairs.length}…`;
+      try { await window.TT_UPLOAD.send(p.file.handle, { match_id: p.want.match_id, player: p.want.player, game: p.want.game }); ok += 1; } catch (e) { errs.push(`${p.file.name}: ${e.message || e}`); }
+    }
+    upMsg.textContent = `${ok ? `Uploaded ${ok}. They’re read at the next update (within 30 minutes).` : 'Nothing was uploaded.'}${errs.length ? ` Couldn’t upload: ${errs.join('; ')}` : ''}`;
+    upPairs = [];
+  });
+
   function drawReview(names) {
     drawFolder();
-    if (document.activeElement !== rvPlayer) {
-      rvPlayer.replaceChildren(new Option('All players', ''), ...names.map((n) => new Option(steamOr(n), n)));
-      rvPlayer.value = P().rp && names.includes(P().rp) ? P().rp : '';
+    {
+      const picked = rvPicked().filter((n) => names.includes(n));
+      const chip = (label, on, click) => { const b = mk('button', 'tt-chip', label); b.type = 'button'; b.setAttribute('aria-pressed', String(on)); b.addEventListener('click', click); return b; };
+      rvPlayer.replaceChildren(chip('All players', !picked.length, () => dash.setParams({ rp: null })),
+        ...names.map((n) => chip(steamOr(n), picked.includes(n), () => {
+          const next = picked.includes(n) ? picked.filter((x) => x !== n) : picked.concat(n);
+          dash.setParams({ rp: next.length && next.length < names.length ? next.join(',') : null });
+        })));
     }
     rvType.value = P().rt || '';
     rvReplay.value = P().rr || '';
@@ -605,7 +699,8 @@
     let rows = [];
     if (list.status === 'error') failed(tbl.tBodies[0]);
     else if (list.status === 'ok') {
-      rows = list.data.filter((r) => (!P().rp || r.players.split(', ').includes(P().rp)) && (!P().rt || r.views.split('|').includes(P().rt))
+      const pick = rvPicked();
+      rows = list.data.filter((r) => (!pick.length || r.players.split(', ').some((x) => pick.includes(x))) && (!P().rt || r.views.split('|').includes(P().rt))
         && (!P().rr || (P().rr === 'analysed' ? r.replay === 'analysed' : r.replay !== 'analysed')));
       fillTable(tbl, rows, [
         { field: 'started', label: 'Date', fmt: (v) => d3.utcFormat('%b %-d, %Y')(new Date(v)) },
@@ -1281,6 +1376,7 @@
       mePick.value = names.includes(ME.player) ? ME.player : '';
     }
     drawLive();
+    el('account-avatar').textContent = (ME.player ? steamOr(ME.player) : '?').slice(0, 1).toUpperCase();
     if (current === 'home') drawHome(tid, names, strows);
     if (current === 'rivals') drawRivals(names);
 

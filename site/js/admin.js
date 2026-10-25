@@ -622,10 +622,9 @@
   // ------------------------------------------------------------------ drawing
   let lastSig = '';
   function draw() {
-    const tab = el('tab-admin');
     const st = ME();
     const org = window.TT_ORG && TT_ORG.isOrganizer();
-    if (tab) tab.hidden = !org;
+    if (window.TT_syncAdmin) window.TT_syncAdmin(!!org); // render.js shows the Admin section to organizers only
     const page = el('admin');
     if (!org && st.role && page && !page.hidden && window.TT_show) { window.TT_show('home', true); return; } // not an organizer (once the role is known)
     if (!org || !page || page.hidden) return;

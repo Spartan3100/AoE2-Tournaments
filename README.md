@@ -77,6 +77,8 @@ Everyone invited sees a change straight away; the next update writes it into `co
 
 *Already set up before the Admin tab was added?* Run all of `supabase/schema.sql` again in the Supabase SQL Editor. It's safe to run again: everyone who already joined becomes a player, and you stay the owner.
 
+*On a phone:* open the site, then iPhone (Safari): Share → **Add to Home Screen**; Android (Chrome): ⋮ → **Install app**. It opens full screen with its own icon. The look (Classic AoE, Clean & light, Dark & gold) is in your account menu, top right, and follows you to every device you sign in on.
+
 *Entering a result by hand:* in **Admin > Manage**, each game in the schedule has **Enter result** (or **Edit**), and an open playoff series has **Enter a game**. Use it for a tournament game Microsoft has no record of, or to correct one; standings and the bracket update at once. Needs `supabase/schema.sql` run again after 2026-10-25.
 
 *Adding replays:* in **Games**, a game Microsoft has no replay of, or left out of its match history, offers **Add replay** to players and organizers. The file goes to a private Supabase storage bucket; the next update checks it is that game (right player, right time) and reads it. This needs `supabase/schema.sql` run again after 2026-10-24 (it adds the `replay_uploads` table and the `replays` bucket).
