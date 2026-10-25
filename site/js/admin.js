@@ -206,6 +206,7 @@
       if (c.kind === 'player') return `Player: ${p.player}`;
       if (c.kind === 'rules') return `Rules: ${tn}`;
       if (c.kind === 'civ_pool') return `Civ pools: ${tn}`;
+      if (c.kind === 'result') return p.clear ? `Result taken back: ${tn} game ${p.game}` : `Result: ${tn}${p.game != null && p.game !== '' ? ` game ${p.game}` : ` ${p.series}`}, ${p.winner} won`;
       const known = rows('tournaments_file').some((x) => x.tournament_id === p.tournament_id);
       return `${known ? 'Changed' : 'New'} tournament: ${tn}`;
     };
@@ -425,6 +426,34 @@
     const vote = async (s, answer) => {
       try { await ORG().vote({ tournament_id: tid, match_id: String(s.match_id), side: 'org', player: 'organizer', answer }); } catch (e) { say('ov', errText(e)); }
     };
+    // results entered by hand (admin-logic.js result())
+    const openSeries = rows('bracket').filter((b) => b.tournament_id === tid && b.player_high && b.player_low && !b.winner);
+    const today = new Date().toISOString().slice(0, 10);
+    const resultDraft = (g) => ({ game: g.game ?? null, player_a: g.player_a, player_b: g.player_b, winner: g.status === 'Final' ? g.winner : '',
+      civ_a: g.civ_a || '', civ_b: g.civ_b || '', map: g.map || '', played_at: g.played_at ? String(g.played_at).slice(0, 10) : today, byHand: /by hand/.test(g.confirmed_by || '') });
+    const civOpts = (v) => [['', 'Unknown'], ...rows('civ_styles').map((r) => [r.civ, r.civ]), ...(v && !rows('civ_styles').some((r) => r.civ === v) ? [[v, v]] : [])];
+    const resultForm = (g) => {
+      const r = dr.result, k = `mg-${tid}-res`;
+      const save = async (payload, done) => {
+        try { await ORG().save('result', { tournament_id: tid, ...payload }); delete dr.result; say('res', done); } catch (e) { say('res', errText(e)); }
+      };
+      return h('div', { class: 'adm-result' },
+        h('div', { class: 'tt-form' },
+          field('Winner', select(`${k}-w`, r.winner, [['', 'Choose…'], [g.player_a, g.player_a], [g.player_b, g.player_b]], (v) => { r.winner = v; draw(); })),
+          field(`${g.player_a}’s civ`, select(`${k}-ca`, r.civ_a, civOpts(r.civ_a), (v) => { r.civ_a = v; })),
+          field(`${g.player_b}’s civ`, select(`${k}-cb`, r.civ_b, civOpts(r.civ_b), (v) => { r.civ_b = v; })),
+          field('Map', input(`${k}-map`, r.map, (v) => { r.map = v; }, { list: 'adm-maps', maxlength: 60 })),
+          field('Played on', input(`${k}-day`, r.played_at, (v) => { r.played_at = v; }, { type: 'date', max: today }))),
+        h('div', { class: 'tt-btns' },
+          btn('Save result', () => {
+            if (!r.winner) { say('res', 'Choose who won.'); return; }
+            save(r.series ? { series: r.series, stage: r.stage, player_a: g.player_a, player_b: g.player_b, winner: r.winner, civ_a: r.civ_a, civ_b: r.civ_b, map: r.map.trim(), played_at: r.played_at }
+              : { game: g.game, winner: r.winner, civ_a: r.civ_a, civ_b: r.civ_b, map: r.map.trim(), played_at: r.played_at },
+            `Saved: ${r.winner} won. Standings and the bracket show it now.`);
+          }, 'primary', { disabled: !r.winner }),
+          r.byHand && !r.series && btn('Take the result back', () => { if (confirm(`Take back the result of game ${g.game}?`)) save({ game: g.game, clear: true }, `Game ${g.game}'s result was taken back.`); }),
+          btn('Cancel', () => { delete dr.result; draw(); })));
+    };
     const status = t.status;
     const next = status === 'Upcoming' ? ['Active', 'Start it (make active)'] : status === 'Active' ? ['Completed', 'Mark completed'] : ['Active', 'Reopen'];
 
@@ -492,12 +521,19 @@
 
       sec('Schedule',
         h('div', { class: 'tt-scroll adm-tall' }, h('table', {},
-          h('thead', {}, h('tr', {}, ['Game', 'Stage', 'Players', 'Result'].map((x) => h('th', { text: x })))),
-          h('tbody', {}, games.length ? games.slice().sort((a, b) => Number(a.game) - Number(b.game)).map((g) => h('tr', {},
+          h('thead', {}, h('tr', {}, ['Game', 'Stage', 'Players', 'Result', ''].map((x) => h('th', { text: x })))),
+          h('tbody', {}, games.length ? games.slice().sort((a, b) => Number(a.game) - Number(b.game)).flatMap((g) => [h('tr', {},
             h('td', { class: 'num', text: String(g.game) }), h('td', { text: g.stage + (g.series ? ` · ${g.series}` : '') }), h('td', { text: `${g.player_a} vs ${g.player_b}` }),
-            h('td', {}, g.status === 'Final' ? h('span', { class: 'tt-pill active', text: `${g.winner} won` }) : h('span', { class: 'tt-pill', text: g.status || 'Scheduled' }))))
-            : h('tr', {}, h('td', { colspan: '4', class: 'tt-empty', text: 'No games yet. Save the players to make the schedule.' }))))),
-        note('To fix a result, edit that game in config/matches.json on GitHub (or ask Claude Code).', { class: 'tt-note adm-flat' })),
+            h('td', {}, g.status === 'Final' ? h('span', { class: 'tt-pill active', text: `${g.winner} won${/by hand/.test(g.confirmed_by || '') ? ' · entered' : ''}` }) : h('span', { class: 'tt-pill', text: g.status || 'Scheduled' })),
+            h('td', {}, g.player_a && g.player_b && btn(g.status === 'Final' ? 'Edit' : 'Enter result', () => { dr.result = resultDraft(g); draw(); }, 'small'))),
+          dr.result && dr.result.game === g.game ? h('tr', {}, h('td', { colspan: '5' }, resultForm(g))) : null].filter(Boolean))
+            : h('tr', {}, h('td', { colspan: '5', class: 'tt-empty', text: 'No games yet. Save the players to make the schedule.' }))))),
+        openSeries.length ? h('div', { class: 'tt-btns' }, ...openSeries.map((b) => btn(`Enter a game: ${b.series} (${b.player_high} vs ${b.player_low})`, () => {
+          dr.result = { ...resultDraft({ player_a: b.player_high, player_b: b.player_low }), series: b.series, stage: b.round || 'Playoffs' }; draw();
+        }, 'small'))) : null,
+        dr.result && dr.result.series ? resultForm({ player_a: dr.result.player_a, player_b: dr.result.player_b, series: dr.result.series }) : null,
+        note('Games are filled in by themselves when both players (or an organizer) confirm a game the site found. Enter a result by hand for a game Microsoft has no record of, or to correct one.', { class: 'tt-note adm-flat' }),
+        msg('res')),
 
       sec('Civ pools',
         note(Object.keys(pools).length ? `${Number(t.pool_size) || '?'} civs per player · pools set for ${roster.filter((p) => (pools[p] || []).length).length} of ${roster.length} players.` : 'No civ pools: any civ is allowed.', { class: 'tt-note adm-flat' }),
@@ -610,7 +646,7 @@
   }
   // redraw when something the Admin tab shows has changed (live games and polling fire often; the data is small)
   dash.onData(() => {
-    const sig = JSON.stringify([['tournaments', 'players', 'roster', 'matches', 'rules', 'civ_pool', 'civ_styles', 'admin_changes', 'votes', 't_suggest'].map((k) => [dash.data(k).status, rows(k)]),
+    const sig = JSON.stringify([['tournaments', 'players', 'roster', 'matches', 'rules', 'civ_pool', 'civ_styles', 'admin_changes', 'votes', 't_suggest', 'bracket'].map((k) => [dash.data(k).status, rows(k)]),
       el('admin') && el('admin').hidden, window.TT_ORG && TT_ORG.isOrganizer()]);
     if (sig === lastSig) return;
     lastSig = sig;

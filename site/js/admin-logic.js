@@ -1,4 +1,5 @@
-// Organizer changes made on the site (Supabase table "admin_changes"): tournaments, players, rules and civ pools.
+// Organizer changes made on the site (Supabase table "admin_changes"): tournaments, players, rules, civ pools and
+// results entered by hand (a tournament game Microsoft has no record of, or a result to correct).
 // Shared by the site (shows a change straight away) and pipeline/apply_admin_changes.js (saves it into
 // config/*.json every 30 minutes, then clears it), so both always agree. Applying the same change twice gives
 // the same files, so a change that was saved but not yet cleared does no harm.
@@ -109,10 +110,53 @@
           [...new Set(civs.map((x) => str(x, 40)).filter(Boolean))].slice(0, 80).forEach((civ) => rows.push({ tournament_id: tid, player: name, civ }));
         });
         out.civ_pool = out.civ_pool.filter((r) => r.tournament_id !== tid).concat(rows);
+      } else if (c.kind === 'result') {
+        if (!result(out, p, c.id)) return;
       } else return;
       applied.push(c.id);
     });
     return { ...out, applied };
+  }
+
+  // A result entered by hand. p: {tournament_id, game} for a scheduled game (or one already played, to correct it), or
+  // {tournament_id, series, stage, player_a, player_b} to add the next game of a playoff series; then winner, civ_a,
+  // civ_b, map, played_at; or clear: true to take a result back (a pool game goes back to Scheduled, an added playoff
+  // game is removed). A series game keeps the change id (entered_id), so applying the same change twice adds it once.
+  function result(out, p, id) {
+    const tid = str(p.tournament_id, 40);
+    if (!validId(tid)) return false;
+    const civ = (v) => str(v, 40);
+    let row;
+    if (p.game != null && p.game !== '') {
+      row = out.matches.find((m) => m.tournament_id === tid && Number(m.game) === Number(p.game));
+      if (!row) return false;
+      if (p.clear === true) {
+        if (row.stage !== 'Pool play' && row.entered_id != null) { out.matches = out.matches.filter((m) => m !== row); return true; }
+        Object.assign(row, { status: 'Scheduled', winner: '', civ_a: '', civ_b: '', map: '', duration_min: null, played_at: '', match_id: '', confirmed_by: '' });
+        return true;
+      }
+    } else {
+      const series = str(p.series, 60);
+      if (!series || p.clear === true) return false;
+      if (out.matches.some((m) => m.tournament_id === tid && m.entered_id === id)) return true; // already added
+      const a = str(p.player_a, 40), b = str(p.player_b, 40);
+      const onRoster = new Set(out.roster.filter((r) => r.tournament_id === tid).map((r) => r.player));
+      if (!onRoster.has(a) || !onRoster.has(b) || a === b) return false;
+      const t = out.tournaments.find((x) => x.tournament_id === tid) || {};
+      const need = Math.ceil((Number(t.best_of) || 3) / 2);
+      const done = out.matches.filter((m) => m.tournament_id === tid && m.series === series && m.status === 'Final');
+      if (done.filter((m) => m.winner === a).length >= need || done.filter((m) => m.winner === b).length >= need) return false; // series over
+      const next = Math.max(0, ...out.matches.filter((m) => m.tournament_id === tid).map((m) => Number(m.game) || 0)) + 1;
+      row = { ...game(tid, next, a, b), stage: str(p.stage, 40) || 'Playoffs', series, series_game: done.length + 1, entered_id: id };
+      out.matches.push(row);
+    }
+    const winner = str(p.winner, 40);
+    if (winner !== row.player_a && winner !== row.player_b) { if (row.entered_id === id) out.matches = out.matches.filter((m) => m !== row); return false; }
+    Object.assign(row, {
+      status: 'Final', winner, civ_a: civ(p.civ_a), civ_b: civ(p.civ_b), map: str(p.map, 60), played_at: date(p.played_at),
+      duration_min: row.duration_min ?? null, confirmed_by: 'organizer (entered by hand)',
+    });
+    return true;
   }
 
   root.TT_admin = { apply, roundRobin, STATUSES, MAP_PICKS, FILES };
