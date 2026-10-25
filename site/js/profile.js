@@ -22,6 +22,8 @@
   // the views in the order the owner chose, and their short names (the value is h_scoped's scope name)
   const VIEWS = [['All games', 'All games'], ['Ranked 1v1', 'Ranked 1v1'], ['Ranked team', 'Ranked team'], ['Unranked & other', 'Unranked'], ['Tournament', 'Tournament']];
   const viewName = (v) => (VIEWS.find((x) => x[0] === v) || [v, v])[1];
+  // bars that count something (games, units) rather than win or lose: a neutral colour, so they never read as losses
+  const QTY = 'var(--color-fg-muted)';
   const PERIOD_DAYS = { 'Last year': 365, 'Last 6 months': 183 };
   // sort, switch and expand state for this visit
   const ui = { civSort: { k: 'n', dir: -1 }, vsSort: { k: 'n', dir: -1 }, maps: 'overall', vsAll: false };
@@ -71,7 +73,9 @@
   };
   const rateCell = (r) => {
     const td = mk('td', 'num pf-ratecell');
-    td.append(mk('div', 'pf-rt', `${pct(r.wr)} (${wl(r.w, r.n)})`), C.rateBar(r.wr, `${r.label || ''}\n${wl(r.w, r.n)} in ${num(r.n)} games\n${pct(r.wr)} won`.trim()));
+    const box = mk('div', 'pf-rate');
+    box.append(C.rateBar(r.wr, `${r.label || ''}\n${wl(r.w, r.n)} in ${num(r.n)} games\n${pct(r.wr)} won`.trim()), mk('span', 'pf-rt', `${pct(r.wr)} (${wl(r.w, r.n)})`));
+    td.append(box);
     return td;
   };
 
@@ -239,12 +243,12 @@
     const note = el('pf-maps-note');
     if (!gm.length) { note.textContent = ''; host.append(empty('No games in this view and period.')); return; }
     if (ui.maps === 'overall') {
-      const top = gm.slice(0, 20), mx = top[0].n;
+      const top = gm.slice(0, 20), mx = top[0].n, few = (host.clientWidth || 320) < 460;
       note.textContent = `Games played and win rate on each map, most played first${gm.length > top.length ? ` (top ${top.length} of ${gm.length} maps)` : ''}. The dashed line is 50%.`;
       C.hbars(host, top.map((r) => {
         const tip = `${r.map}\n${num(r.n)} games: ${wl(r.w, r.n)}\n${pct(r.wr)} won`;
-        return { label: r.map, tip, panels: [{ segs: [{ v: r.n, color: 'var(--color-accent)' }], txt: num(r.n), tip }, { segs: [{ v: r.wr, color: C.winColor(r.wr) }], txt: pct(r.wr), tip }] };
-      }), { panels: [{ title: 'Games played', max: mx, ticks: C.niceTicks(0, mx, 3).filter((v) => v <= mx), fmtT: num }, { title: 'Win rate', max: 1, ref: 0.5, ticks: [0, 0.5, 1], fmtT: pct }], label: 'Games played and win rate by map' });
+        return { label: r.map, tip, panels: [{ segs: [{ v: r.n, color: QTY }], txt: num(r.n), tip }, { segs: [{ v: r.wr, color: C.winColor(r.wr) }], txt: pct(r.wr), tip }] };
+      }), { panels: [{ title: 'Games played', max: mx, ticks: C.niceTicks(0, mx, few ? 2 : 4).filter((v) => v <= mx), fmtT: num }, { title: 'Win rate', max: 1, ref: 0.5, ticks: [0, 0.5, 1], fmtT: pct }], label: 'Games played and win rate by map' });
       return;
     }
     // By month: maps × months, coloured by win rate
@@ -263,7 +267,7 @@
       const mo = months[c], a = cells[r].get(mo.y * 12 + mo.m) || [], q = rec(a);
       const name = d3.utcFormat('%B %Y')(new Date(Date.UTC(mo.y, mo.m, 1)));
       return a.length ? { fill: C.heatColor(q.wr), tip: `${top[r].map} · ${name}\n${num(q.n)} games: ${wl(q.w, q.n)}\n${pct(q.wr)} won` } : { fill: 'var(--color-panel)', empty: true, tip: `${top[r].map} · ${name}\nNo games` };
-    }, { every: nMonths > 12 ? 3 : w < 460 && nMonths > 6 ? 2 : 1, label: 'Win rate by map and month', cellH: 20 });
+    }, { every: Math.max(1, Math.ceil(46 / Math.max(1, (w - (w < 460 ? 82 : 112)) / nMonths))), label: 'Win rate by map and month', cellH: 20 });
     host.append(C.legend([[C.heatColor(0.8), 'Won more'], [C.heatColor(0.5), 'About even'], [C.heatColor(0.2), 'Lost more']]));
   }
   const monthsBetween = (a, b) => { const x = new Date(a), y = new Date(b); return (y.getUTCFullYear() - x.getUTCFullYear()) * 12 + y.getUTCMonth() - x.getUTCMonth(); };
@@ -338,10 +342,14 @@
       const k = cnt[r][c];
       const tip = `${DAYS[r]} ${String(c).padStart(2, '0')}:00–${String(c).padStart(2, '0')}:59\n${k.n ? `${num(k.n)} game${k.n === 1 ? '' : 's'}, ${num(k.w)} won (${pct(k.w / k.n)})` : 'No games'}`;
       return k.n ? { fill: `color-mix(in srgb, var(--color-accent) ${Math.round(18 + (k.n / mx) * 82)}%, var(--color-soft))`, tip } : { fill: 'var(--color-soft)', tip };
-    }, { labelW: 34, cellH: hw < 460 ? 22 : 18, every: hw < 460 ? 6 : 3, label: 'Games by day and hour', xTitle: 'Hour of day (your time)' });
+    }, { labelW: 34, cellH: hw < 460 ? 22 : 18, every: 1, label: 'Games by day and hour', xTitle: 'Hour of day (your time, 0 = midnight)' });
     let tz = '';
     try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* no Intl */ }
-    el('pf-hours-note').textContent = `Day and hour each game started, in your local time${tz ? ` (${tz})` : ''}. Darker means more games; hover or tap a box for the count.`;
+    // the hour they play most, across all days
+    const byHour = Array.from({ length: 24 }, (_, h) => cnt.reduce((a, d) => ({ n: a.n + d[h].n, w: a.w + d[h].w }), { n: 0, w: 0 }));
+    const top = byHour.map((k, h) => ({ ...k, h })).sort((a, b) => b.n - a.n)[0];
+    const hh2 = (h) => `${String(h % 24).padStart(2, '0')}:00`;
+    el('pf-hours-note').textContent = `${top && top.n ? `Plays most between ${hh2(top.h)} and ${hh2(top.h + 1)} (${num(top.n)} games, ${pct(top.w / top.n)} won). ` : ''}Day and hour each game started, in your local time${tz ? ` (${tz})` : ''}. Darker means more games; hover or tap a box for the count.`;
   }
 
   // ---------------------------------------------------------------- 7. strategy (openings donut)
@@ -424,9 +432,9 @@
       C.hbars(mh, mrows.map((r) => {
         const nm = X.names.includes(r.name) ? X.steamOr(r.name) : r.name;
         const tip = `Playing with ${nm}\n${num(r.n)} games: ${wl(r.w, r.n)}\n${pct(r.wr)} won`;
-        return { label: nm, tip, panels: [{ segs: [{ v: r.wr, color: C.winColor(r.wr) }], txt: `${pct(r.wr)}`, tip }] };
-      }), { panels: [{ max: 1, ref: 0.5, ticks: [0, 0.5, 1], fmtT: pct }], rowH: 30, label: 'Win rate by teammate' });
-      mh.append(mk('p', 'tt-note', `The ${mrows.length} most frequent teammates; every teammate in a game counts. Hover or tap a bar for the record.`));
+        return { label: nm, tip, panels: [{ segs: [{ v: r.wr, color: C.winColor(r.wr) }], txt: `${pct(r.wr)} · ${num(r.n)}`, tip }] };
+      }), { panels: [{ max: 1, ref: 0.5, ticks: [0, 0.5, 1], fmtT: pct, txtW: 66 }], rowH: 30, label: 'Win rate by teammate' });
+      mh.append(mk('p', 'tt-note', `Win rate and games together, for the ${mrows.length} most frequent teammates; every teammate in a game counts. Hover or tap a bar for the record.`));
     }
     const combo = (r) => { const t = String(r.team_civs || '').split(',').map((s) => s.trim()).filter(Boolean).sort(); return t.length && r.civ ? `${r.civ} + ${t.join(', ')}` : null; };
     const minN = tg.length > 80 ? 3 : 2;
@@ -524,7 +532,7 @@
         const mx = Math.max(...top.map((r) => r.share));
         C.hbars(ub, top.map((r) => {
           const tip = `${r.unit_class}\n${pct(r.share)} of military units\n${num(r.units)} queued`;
-          return { label: r.unit_class, tip, panels: [{ segs: [{ v: r.share, color: 'var(--color-accent)' }], txt: pct(r.share), tip }] };
+          return { label: r.unit_class, tip, panels: [{ segs: [{ v: r.share, color: QTY }], txt: pct(r.share), tip }] };
         }), { panels: [{ max: mx, ticks: C.niceTicks(0, mx, 3).filter((v) => v <= mx), fmtT: pct }], label: 'Army composition' });
       }
     } else if (dash.data('s_units').status === 'error') failed(ub);

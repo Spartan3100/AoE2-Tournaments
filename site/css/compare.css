@@ -141,3 +141,5 @@
   .tt .cmp-vs-row { grid-template-columns: minmax(0, 1fr) minmax(5.5rem, auto) minmax(0, 1fr); font-size: 13px; }
 }
 .tt .cmp-games .tt-links { flex-wrap: nowrap; }
+/* the head-to-head games table (with links) needs the full width; side by side follows below it */
+.tt #cmp-h2h, .tt #cmp-side { grid-column: 1 / -1; }

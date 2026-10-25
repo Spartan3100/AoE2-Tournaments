@@ -23,6 +23,7 @@
     Object.entries(attrs || {}).forEach(([k, v]) => {
       if (v == null) return;
       if (k === 'text') e.textContent = v;
+      else if (k === 'style') e.style.cssText += ';' + v; // keeps fills set through the style below
       else if (k === 'tip') { if (v) e.setAttribute('data-tip', v); }
       else if (STYLE_PROPS.has(k)) e.style.setProperty(k, String(v)); // var(--token) works in style, not in every attribute
       else e.setAttribute(k, v);
@@ -44,8 +45,10 @@
   const winColor = (r) => (r >= 0.5 ? 'var(--color-ok)' : 'var(--color-bad)');
   // stronger colour the further from 50%
   const heatColor = (r) => `color-mix(in srgb, ${winColor(r)} ${Math.round(Math.min(100, 22 + Math.abs(r - 0.5) * 2 * 150))}%, var(--color-soft))`;
-  const PAL = ['var(--color-accent)', 'var(--color-warn)', 'var(--color-fg-muted)', 'color-mix(in srgb, var(--color-accent) 45%, var(--color-panel))',
-    'color-mix(in srgb, var(--color-warn) 45%, var(--color-panel))', 'var(--cds-chart-axis)', 'var(--color-fg)'];
+  // categorical colours (openings and the like): told apart by lightness as much as hue, so they work in all three looks;
+  // win/loss green and red are left out on purpose
+  const PAL = ['var(--color-accent)', 'var(--color-fg-muted)', 'color-mix(in srgb, var(--color-accent) 42%, var(--color-panel))', 'var(--color-fg)',
+    'var(--cds-chart-axis)', 'color-mix(in srgb, var(--color-fg-muted) 40%, var(--color-panel))', 'var(--color-warn)'];
 
   // ---------------------------------------------------------------- styles (tokens only), injected once
   const css = `
@@ -236,7 +239,8 @@
     const w = width(b), small = w < 460;
     const lw = o.labelW || (small ? 80 : 110), ch = o.cellH || 20, gap = 2;
     const cw = (w - lw - 2) / cols.length;
-    const h = rows.length * (ch + gap) + 20 + (o.xTitle ? 16 : 0);
+    const stagger = cw < 16 && (o.every || 1) === 1; // too narrow for every label on one line: alternate two lines
+    const h = rows.length * (ch + gap) + 20 + (stagger ? 10 : 0) + (o.xTitle ? 16 : 0);
     const svg = svgOf(w, h, o.label); b.appendChild(svg);
     rows.forEach((rl, r) => {
       svg.appendChild(S('text', { x: lw - 6, y: r * (ch + gap) + ch / 2 + 4, class: 'lab', 'text-anchor': 'end', text: trunc(rl, small ? 11 : 16) }));
@@ -247,7 +251,9 @@
       });
     });
     const every = o.every || 1, yl = rows.length * (ch + gap) + 12;
-    cols.forEach((cl, c) => { if (c % every === 0) svg.appendChild(S('text', { x: lw + c * cw + cw / 2, y: yl, class: 'ax', 'text-anchor': 'middle', text: cl })); });
+    // narrow columns (24 hours on a phone) get smaller labels rather than fewer
+    const fs = cw < 18 ? 10 : null;
+    cols.forEach((cl, c) => { if (c % every === 0) svg.appendChild(S('text', { x: lw + c * cw + cw / 2, y: yl + (stagger && c % 2 ? 10 : 0), class: 'ax', 'text-anchor': 'middle', 'font-size': fs, text: cl })); });
     if (o.xTitle) svg.appendChild(S('text', { x: lw + (w - lw) / 2, y: h - 2, class: 'ax', 'text-anchor': 'middle', text: o.xTitle }));
     return b;
   }

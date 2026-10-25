@@ -39,8 +39,10 @@
 .tt .pf .pf-sort { background: none; border: 0; padding: 4px 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; min-height: 32px; }
 .tt .pf th[aria-sort] .pf-sort { color: var(--color-accent); }
 .tt .pf .pf-tall { max-height: 26rem; overflow: auto; }
-.tt .pf td.pf-ratecell { min-width: 140px; }
-.tt .pf td.pf-ratecell .pf-rt { font-size: 12px; margin-bottom: 3px; }
+.tt .pf td.pf-ratecell { min-width: 150px; width: 45%; }
+.tt .pf .pf-rate { display: flex; align-items: center; gap: 10px; }
+.tt .pf .pf-rate .tt-c-bar { flex: 1; }
+.tt .pf .pf-rt { font-size: 12px; min-width: 6.5em; text-align: right; }
 .tt .pf td.pf-wrap { white-space: normal; min-width: 10rem; }
 
 /* lists (matchups, latest games) */
