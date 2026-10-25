@@ -2,20 +2,69 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#8c2f1f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AoE2 Tourney">
 <title>AoE2 Tournaments</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237a1e1e'/%3E%3Cpath d='M12 9v14l11-7z' fill='%23f0d696'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/app.css">
 <meta name="robots" content="noindex, nofollow">
-<script>document.documentElement.classList.add('tt-locked');</script>
+<script>
+document.documentElement.classList.add('tt-locked');
+// the look chosen last time (Classic AoE by default), before anything draws; backend.js also keeps it with your account
+try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) { /* storage blocked */ }
+</script>
 </head>
 <body>
 <div id="dash-root">
 <div class="tt">
-  <header>
-    <h1 class="tt-title">AoE2 Tournaments</h1>
-    <p class="tt-take" id="takeaway">—</p>
+  <!-- Main sections (Home, Tournament, Players, Games, Admin); each section's pages are the tabs below it.
+       On phones the sections move to the bottom bar (.tt-bottom) with Upload in the middle. -->
+  <header class="tt-head">
+    <a class="tt-brand" href="#home" id="brand"><i aria-hidden="true">A2</i><span>AoE2 Tournaments</span></a>
+    <nav class="tt-sections" aria-label="Main">
+      <button type="button" data-section="home">Home</button>
+      <button type="button" data-section="tournament">Tournament</button>
+      <button type="button" data-section="players">Players</button>
+      <button type="button" data-section="games">Games</button>
+      <button type="button" data-section="admin" id="section-admin" hidden>Admin</button>
+    </nav>
+    <span class="tt-grow"></span>
+    <button type="button" class="tt-btn primary tt-upload-open" id="upload-open">+ Upload a game</button>
+    <details class="tt-account" id="account">
+      <summary aria-label="Your account and settings"><span class="tt-avatar" id="account-avatar">?</span></summary>
+      <div class="tt-account-menu">
+        <label class="tt-field"><span class="tt-label">I’m</span>
+          <select id="me-pick" data-source="players" aria-label="Which player are you?"><option value="">Choose…</option></select></label>
+        <div class="tt-field"><span class="tt-label">Look</span>
+          <div class="tt-seg" id="theme-pick" role="group" aria-label="Look">
+            <button type="button" data-theme="classic">Classic AoE</button><button type="button" data-theme="clean">Clean &amp; light</button><button type="button" data-theme="dark">Dark &amp; gold</button>
+          </div></div>
+        <button type="button" class="tt-btn" id="account-admin" hidden>Admin</button>
+        <span id="auth-box" hidden></span>
+      </div>
+    </details>
   </header>
+
+  <nav class="tt-tabs" role="tablist" aria-label="Pages in this section">
+    <button role="tab" id="tab-home" data-tab="home" data-in="home">Home</button>
+    <button role="tab" id="tab-standings" data-tab="standings" data-in="tournament">Standings</button>
+    <button role="tab" id="tab-playoffs" data-tab="playoffs" data-in="tournament">Playoffs</button>
+    <button role="tab" id="tab-schedule" data-tab="schedule" data-in="tournament">Schedule</button>
+    <button role="tab" id="tab-civs-maps" data-tab="civs-maps" data-in="tournament">Civs &amp; maps</button>
+    <button role="tab" id="tab-format" data-tab="format" data-in="tournament">Rules &amp; format</button>
+    <button role="tab" id="tab-all" data-tab="all" data-in="tournament">All tournaments</button>
+    <button role="tab" id="tab-profiles" data-tab="profiles" data-in="players">Profiles</button>
+    <button role="tab" id="tab-rivals" data-tab="rivals" data-in="players">Compare</button>
+    <button role="tab" id="tab-review" data-tab="review" data-in="games">Games</button>
+    <button role="tab" id="tab-check" data-tab="check" data-in="games">Data check</button>
+    <button role="tab" id="tab-admin" data-tab="admin" data-in="admin" hidden>Admin</button>
+  </nav>
 
   <div class="tt-controls" id="t-bar">
     <label class="tt-label" for="t-pick">Tournament</label>
@@ -23,9 +72,7 @@
     <span class="tt-pill" id="t-status"></span>
     <span class="tt-label" id="t-dates"></span>
     <button type="button" class="tt-pill" id="check-badge" data-source="data_check" title="Open the data check"></button>
-    <label class="tt-label" for="me-pick">I'm</label>
-    <select id="me-pick" data-source="players" aria-label="Which player are you?"><option value="">Choose…</option></select>
-    <span id="auth-box" hidden></span>
+    <p class="tt-take" id="takeaway">—</p>
   </div>
 
   <section class="tt-kpis" id="headline">
@@ -34,21 +81,6 @@
     <div class="tt-card"><div class="tt-label">Players</div><div class="tt-kpi-v dash-skeleton" data-k="players">—</div></div>
     <div class="tt-card"><div class="tt-label">Average game length (min)</div><div class="tt-kpi-v dash-skeleton" data-k="avg_minutes">—</div></div>
   </section>
-
-  <nav class="tt-tabs" role="tablist">
-    <button role="tab" id="tab-home" data-tab="home">Home</button>
-    <button role="tab" id="tab-standings" data-tab="standings">Standings</button>
-    <button role="tab" id="tab-playoffs" data-tab="playoffs">Playoffs</button>
-    <button role="tab" id="tab-schedule" data-tab="schedule">Schedule</button>
-    <button role="tab" id="tab-civs-maps" data-tab="civs-maps">Civs &amp; maps</button>
-    <button role="tab" id="tab-format" data-tab="format">Format</button>
-    <button role="tab" id="tab-profiles" data-tab="profiles">Player profiles</button>
-    <button role="tab" id="tab-rivals" data-tab="rivals">Head to head</button>
-    <button role="tab" id="tab-review" data-tab="review">Match review</button>
-    <button role="tab" id="tab-all" data-tab="all">All tournaments</button>
-    <button role="tab" id="tab-check" data-tab="check">Data check</button>
-    <button role="tab" id="tab-admin" data-tab="admin" hidden>Admin</button>
-  </nav>
 
   <!-- ===================== Home ===================== -->
   <section class="tt-page" id="home">
@@ -336,7 +368,7 @@
   <section class="tt-page" id="review" hidden>
     <div class="tt-card tt-folder" id="rv-folder-card" hidden>
       <h2>Your replay folder</h2>
-      <p class="tt-note">Link AoE2’s replay folder once, and whenever you open Match review the site looks in it for your games that have no replay here (Microsoft’s server has no copy, or the game is missing from its records) and adds them. Only those files are uploaded. The folder is <code>Games\Age of Empires 2 DE\&lt;your id&gt;\savegame</code> in your user folder.</p>
+      <p class="tt-note">Link AoE2’s replay folder once, and whenever you open Games the site looks in it for your games that have no replay here (Microsoft’s server has no copy, or the game is missing from its records) and adds them. Only those files are uploaded. The folder is <code>Games\Age of Empires 2 DE\&lt;your id&gt;\savegame</code> in your user folder.</p>
       <div class="tt-controls" id="rv-folder"></div>
       <p class="tt-note" id="rv-folder-msg"></p>
     </div>
@@ -344,8 +376,8 @@
       <h2>Games</h2>
       <p class="tt-note" id="rv-list-note">Every game of your players. Pick one to review. Games whose replay is on Microsoft’s server get the full analysis and map playback; a game marked ⚠ was played (the result and civs come from the match list), but its strategy details are unknown.</p>
       <div class="tt-controls">
-        <label class="tt-label" for="rv-player">Player</label>
-        <select id="rv-player" data-source="players"></select>
+        <span class="tt-label">Players</span>
+        <div class="tt-chips tt-pick-players" id="rv-player" data-source="players" role="group" aria-label="Players"></div>
         <label class="tt-label" for="rv-type">Games</label>
         <select id="rv-type">
           <option value="">All games</option>
@@ -442,10 +474,32 @@
       <ul class="tt-rules">
         <li><b>Games, civs, results, ratings, maps:</b> come straight from the official match records, and are checked against AoE2 Companion after every update.</li>
         <li><b>Replay results:</b> when a replay and the match records disagree on who won, the official record is used.</li>
-        <li><b>Strategies, unit types and positions:</b> worked out from each replay's orders by fixed rules (see "How strategies are read" in Player profiles). They can't be checked against another site; to check one, use "Watch in AoE2" in Match review and compare.</li>
+        <li><b>Strategies, unit types and positions:</b> worked out from each replay's orders by fixed rules (see "How strategies are read" in Players → Profiles). They can't be checked against another site; to check one, use "Watch in AoE2" in Games and compare.</li>
       </ul>
     </div>
   </section>
+<nav class="tt-bottom" aria-label="Main">
+  <button type="button" data-section="home"><b aria-hidden="true">⌂</b>Home</button>
+  <button type="button" data-section="tournament"><b aria-hidden="true">≡</b>Tournament</button>
+  <button type="button" class="tt-plus" id="upload-open-2"><b aria-hidden="true">+</b>Upload</button>
+  <button type="button" data-section="players"><b aria-hidden="true">☺</b>Players</button>
+  <button type="button" data-section="games"><b aria-hidden="true">▶</b>Games</button>
+</nav>
+<div class="tt-sheet" id="upload-sheet" hidden>
+  <div class="tt-sheet-in" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+    <h2 id="upload-title">Upload a game</h2>
+    <p class="tt-note" id="upload-note">Choose replays of your games. Each one is matched to its game by when it was played, checked, and read at the next update (within 30 minutes).</p>
+    <label class="tt-drop"><b>Choose .aoe2record files</b><span class="tt-note">several at once is fine</span>
+      <input type="file" id="upload-files" multiple accept=".aoe2record,.zip"></label>
+    <ul class="tt-list" id="upload-list"></ul>
+    <p class="tt-note" id="upload-msg" role="status"></p>
+    <div class="tt-btns">
+      <button type="button" class="tt-btn primary" id="upload-send" disabled>Upload</button>
+      <button type="button" class="tt-btn" id="upload-folder">Link my replay folder</button>
+      <button type="button" class="tt-btn" id="upload-close">Close</button>
+    </div>
+  </div>
+</div>
 </div>
 </div>
 <script src="vendor/d3.min.js"></script>
