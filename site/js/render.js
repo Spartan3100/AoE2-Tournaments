@@ -824,6 +824,50 @@
     if (ready) applyGame(ready);
   }
 
+  // ---------------------------------------------------------------- live now (Home), and a dot on the Home tab
+  // games a tracked player is in right now (dash.js TT_LIVE.ongoing, from AoE2 Companion). "Spectate in AoE2" uses the
+  // game's own link, aoe2de://1/<match id>, which opens Age of Empires II: DE spectating that match.
+  function drawLive() {
+    const games = (window.TT_LIVE && TT_LIVE.ongoing) || [];
+    el('tab-home').classList.toggle('tt-live-dot', games.length > 0);
+    el('tab-home').title = games.length ? `${games.length} game${games.length > 1 ? 's' : ''} live now` : '';
+    const card = el('home-live-card');
+    card.hidden = !games.length;
+    if (!games.length) return;
+    const md = dash.data('matches'), td = dash.data('tournaments');
+    const open = md.status === 'ok' ? md.data.filter((m) => m.status !== 'Final' && m.player_a && m.player_b) : [];
+    const tname = new Map(td.status === 'ok' ? td.data.map((t) => [t.tournament_id, t.name || t.tournament_id]) : []);
+    const items = games.map((g) => {
+      const ours = g.players.filter((p) => p.player).map((p) => p.player);
+      // two tournament players against each other in a 1v1 with a game still to play between them: likely that game
+      const tour = g.players.length === 2 && ours.length === 2
+        ? open.find((m) => (m.player_a === ours[0] && m.player_b === ours[1]) || (m.player_a === ours[1] && m.player_b === ours[0])) : null;
+      return { g, ours, tour };
+    }).sort((a, b) => (b.tour ? 1 : 0) - (a.tour ? 1 : 0) || b.ours.length - a.ours.length);
+    el('home-live').replaceChildren(...items.map(({ g, ours, tour }) => {
+      const li = mk('li', 'tt-live-game' + (tour ? ' tour' : ''));
+      const line = mk('div', 'row');
+      const teams = [...new Set(g.players.map((p) => String(p.team)))];
+      const who = mk('div');
+      teams.forEach((t, i) => {
+        if (i) who.append(mk('span', 'tt-vs', ' vs '));
+        g.players.filter((p) => String(p.team) === t).forEach((p, j) => {
+          if (j) who.append(' & ');
+          who.append(mk(p.player ? 'b' : 'span', '', p.player ? steamOr(p.player) : p.name || 'Unknown'), mk('span', 'tt-muted', p.civ ? ` (${p.civ})` : ''));
+        });
+      });
+      const watch = mk('a', 'tt-btn primary', 'Spectate in AoE2');
+      watch.href = `aoe2de://1/${encodeURIComponent(g.match_id)}`;
+      line.append(who, watch);
+      const mins = Math.max(0, Math.round((Date.now() - new Date(g.started)) / 60000));
+      const sub = mk('div', 'sub', `${g.type} · ${g.map || 'Unknown map'} · started ${mins < 1 ? 'just now' : `${mins} min ago`}`);
+      if (tour) sub.prepend(mk('span', 'tt-pill', `Tournament: ${tname.get(tour.tournament_id) || tour.tournament_id} · game ${tour.game}`), ' ');
+      else if (ours.length > 1) sub.prepend(mk('span', 'tt-pill', `${ours.length} of ours`), ' ');
+      li.append(line, sub);
+      return li;
+    }));
+  }
+
   // ---------------------------------------------------------------- home
   function drawHome(tid, names, strows) {
     // freshness
@@ -1168,6 +1212,7 @@
       mePick.replaceChildren(new Option('Choose…', ''), ...names.map((n) => new Option(steam.get(n) ? `${steam.get(n)} (${n})` : n, n)));
       mePick.value = names.includes(ME.player) ? ME.player : '';
     }
+    drawLive();
     if (current === 'home') drawHome(tid, names, strows);
     if (current === 'rivals') drawRivals(names);
 

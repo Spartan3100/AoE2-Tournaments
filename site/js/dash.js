@@ -178,8 +178,21 @@
     });
     return out;
   }
+  // games being played right now with a tracked player in them (no finish time yet), for "Live now" on Home.
+  // AoE2 Companion lists a game as soon as it starts; one that never got a finish time (a crash) is dropped after 3 hours.
+  function ongoingOf(m, roster) {
+    const started = pick(m, 'started', 'startTime');
+    if (!started || pick(m, 'finished', 'finishTime') || Date.now() - new Date(started) > 3 * 3600e3) return null;
+    const players = [];
+    (m.teams || []).forEach((t, i) => (t.players || []).forEach((p) => {
+      const pid = String(pick(p, 'profileId', 'profile_id') || '');
+      players.push({ team: pick(t, 'teamId', 'team') ?? i, name: String(pick(p, 'name') || ''), civ: pick(p, 'civName', 'civ') || '', player: roster.get(pid) || '', rating: pick(p, 'rating') });
+    }));
+    if (!players.some((p) => p.player)) return null;
+    return { match_id: String(pick(m, 'matchId', 'match_id', 'id')), started: iso(started), type: gameType(m, players.length), map: pick(m, 'mapName', 'map') || '', players };
+  }
   const Live = {
-    rows: [], fetchedAt: null, error: '', started: false,
+    rows: [], ongoing: [], fetchedAt: null, error: '', started: false,
     merge(h) {
       if (!this.rows.length) return h;
       const have = new Set(h.map((r) => r.player + '|' + r.match_id));
@@ -191,27 +204,37 @@
       const pl = pv.status === 'ok' ? pv.data : null;
       if (!pl) { setTimeout(() => this.poll(), 1500); return; }
       const roster = new Map(pl.filter((p) => p.profile_id).map((p) => [String(p.profile_id), p.player]));
-      const got = [];
+      const got = [], now = new Map();
       let err = '';
       for (const pid of roster.keys()) {
         try {
           const r = await fetch(API + encodeURIComponent(pid) + '&page=1');
           if (!r.ok) throw new Error(`AoE2 Companion answered ${r.status}`);
           const d = await r.json();
-          (d.matches || []).forEach((m) => got.push(...rowsOf(m, roster)));
+          (d.matches || []).forEach((m) => {
+            got.push(...rowsOf(m, roster));
+            const g = ongoingOf(m, roster);
+            if (g) now.set(g.match_id, g);
+          });
         } catch (e) { err = String(e.message || e); }
       }
       const seen = new Set();
       this.rows = got.filter((r) => { const k = r.player + '|' + r.match_id; if (seen.has(k)) return false; seen.add(k); return true; });
+      this.ongoing = [...now.values()].sort((a, b) => (a.started < b.started ? 1 : -1));
       this.fetchedAt = new Date();
       this.error = err;
       changed();
     },
+    // every minute while someone is playing (so a game shows up, and drops off, promptly), else every 5 minutes
     start() {
       if (this.started) return;
       this.started = true;
-      this.poll();
-      setInterval(() => { if (document.visibilityState === 'visible') this.poll(); }, 5 * 60 * 1000);
+      const tick = async () => {
+        if (document.visibilityState === 'visible') await this.poll();
+        setTimeout(tick, (this.ongoing.length ? 1 : 5) * 60 * 1000);
+      };
+      tick();
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && this.fetchedAt && Date.now() - this.fetchedAt > 60e3) this.poll(); });
     },
   };
   window.TT_LIVE = Live;

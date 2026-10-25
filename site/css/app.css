@@ -237,3 +237,13 @@ html.tt-locked #dash-root { display: none; }
 .tt .tt-add-list { margin: var(--cds-pad-xs) 0 0; padding-left: 1.2em; }
 .tt .tt-add-list li { margin: 2px 0; }
 .tt .tt-btn.tt-small { padding: 0 var(--cds-pad-sm); font-size: 0.85em; }
+
+/* Home: games being played right now */
+.tt .tt-muted { color: var(--color-fg-muted); }
+.tt .tt-live-mark { display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--color-bad); vertical-align: 0.1em; animation: tt-pulse 1.6s ease-in-out infinite; }
+.tt .tt-live-game { padding: var(--cds-pad-xs) 0; }
+.tt .tt-live-game.tour { border-left: 3px solid var(--color-bad); padding-left: var(--cds-pad-sm); }
+.tt .tt-live-game .row { align-items: center; }
+.tt .tt-tabs button.tt-live-dot::after { content: ''; display: inline-block; width: 0.45em; height: 0.45em; margin-left: 0.35em; border-radius: 50%; background: var(--color-bad); vertical-align: 0.2em; }
+@keyframes tt-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .tt .tt-live-mark { animation: none; } }
