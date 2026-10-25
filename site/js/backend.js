@@ -254,7 +254,13 @@
   };
   window.claude = { use: async (name) => { await ready; if (!st.member) return null; return name === 'db' ? db : name === 'user' ? user : null; } };
   window.TT_BACKEND = st;
-  window.TT_UPLOAD = { can: canAddReplays, send: addReplay, list: addedReplays, cancel: takeBackReplay };
+  // games that already have an added replay waiting or read (so the replay folder doesn't add another)
+  async function claimedGames() {
+    const { data, error } = await st.client.from('replay_uploads').select('match_id,status').in('status', ['waiting', 'done']);
+    if (error) throw error;
+    return new Set((data || []).map((r) => r.match_id));
+  }
+  window.TT_UPLOAD = { can: canAddReplays, send: addReplay, list: addedReplays, cancel: takeBackReplay, claimed: claimedGames };
   // the Admin tab (site/js/admin.js); the database rules (supabase/schema.sql) check every one of these again
   const rpc = async (name, args) => { const { data, error } = await st.client.rpc(name, args); if (error) throw error; return data; };
   window.TT_ORG = {

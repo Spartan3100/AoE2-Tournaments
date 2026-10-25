@@ -334,6 +334,12 @@
 
   <!-- ===================== Match review ===================== -->
   <section class="tt-page" id="review" hidden>
+    <div class="tt-card tt-folder" id="rv-folder-card" hidden>
+      <h2>Your replay folder</h2>
+      <p class="tt-note">Link AoE2’s replay folder once, and whenever you open Match review the site looks in it for your games that have no replay here (Microsoft’s server has no copy, or the game is missing from its records) and adds them. Only those files are uploaded. The folder is <code>Games\Age of Empires 2 DE\&lt;your id&gt;\savegame</code> in your user folder.</p>
+      <div class="tt-controls" id="rv-folder"></div>
+      <p class="tt-note" id="rv-folder-msg"></p>
+    </div>
     <div class="tt-card" id="rv-list-card">
       <h2>Games</h2>
       <p class="tt-note" id="rv-list-note">Every game of your players. Pick one to review. Games whose replay is on Microsoft’s server get the full analysis and map playback; a game marked ⚠ was played (the result and civs come from the match list), but its strategy details are unknown.</p>
@@ -450,6 +456,7 @@
 <script src="js/backend.js"></script>
 <script src="js/calcs.js"></script>
 <script src="js/viewer.js"></script>
+<script src="js/replay-folder.js"></script>
 <script src="js/render.js"></script>
 <script src="js/helper.js"></script>
 <script src="js/admin.js"></script>

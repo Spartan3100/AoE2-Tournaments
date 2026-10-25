@@ -525,7 +525,75 @@
     box.append(msg, list);
     refresh();
   }
+  // "Your replay folder" (site/js/replay-folder.js): looks in the linked savegame folder for replays of the signed-in
+  // player's games that have none here, and adds them. Runs by itself once per visit when the browser still allows it.
+  const folderState = { dir: undefined, perm: '', autoDone: false, msg: '' };
+  function folderWanted(list) {
+    const me = ME.player;
+    const min = 60e3;
+    return list.filter((r) => r.players.split(', ').includes(me) && (r.replay === 'missing' || r.replay === 'norecord')).map((r) => {
+      if (r.replay === 'norecord') {
+        const lo = Date.parse(r.info.started), hi = Date.parse(r.info.before);
+        return { match_id: r.match_id, player: me, game: r.info, lo: lo + 3 * min, hi: hi + 5 * min, target: hi };
+      }
+      const start = Date.parse(r.started), end = start + Number(r.duration_min || 0) * min;
+      // the replay file is written when you leave the game, so just after the match list's end time
+      return { match_id: r.match_id, player: me, game: {}, lo: end - 5 * min, hi: end + 20 * min, target: end };
+    });
+  }
+  async function folderRun(ask) {
+    const F = window.TT_FOLDER, up = window.TT_UPLOAD, msg = el('rv-folder-msg');
+    const list = dash.data('review_list');
+    if (!folderState.dir || list.status !== 'ok') return;
+    folderState.perm = await F.permission(folderState.dir, ask).catch(() => 'denied');
+    if (folderState.perm !== 'granted') { drawFolder(true); return; }
+    const wanted = folderWanted(list.data);
+    if (!wanted.length) { msg.textContent = 'None of your games are missing a replay right now.'; return; }
+    msg.textContent = 'Looking in your replay folder…';
+    try {
+      const claimed = await up.claimed();
+      const res = await F.sync(folderState.dir, wanted, (id) => claimed.has(id),
+        (file, w) => up.send(file, { match_id: w.match_id, player: w.player, game: w.game }), (t) => { msg.textContent = t; });
+      if (res) msg.textContent = folderSummary(res);
+    } catch (e) { msg.textContent = `Couldn’t read the folder: ${e.message || e}`; }
+  }
+  function folderSummary(r) {
+    if (!r.wanted) return `Checked ${num(r.files)} replay files: every game of yours that had no replay now has one added (read at the next update, or already read).`;
+    return `Checked ${num(r.files)} replay files for ${num(r.wanted)} of your games without a replay: ${r.added ? `added ${num(r.added)}, read at the next update (every 30 minutes)` : 'no new matches'}.`
+      + (r.errors.length ? ` ${r.errors.length} couldn’t be added: ${r.errors.slice(0, 3).join('; ')}` : '');
+  }
+  async function drawFolder(force) {
+    const card = el('rv-folder-card'), F = window.TT_FOLDER, up = window.TT_UPLOAD;
+    const show = !!(F && up && up.can() && ME.player);
+    card.hidden = !show;
+    if (!show) return;
+    const box = el('rv-folder'), msg = el('rv-folder-msg');
+    if (!F.supported) { box.replaceChildren(); msg.textContent = 'This works in Chrome or Edge on a computer. In other browsers, use “Add replay” on each game.'; return; }
+    if (folderState.dir === undefined) folderState.dir = (await F.folder()) || null;
+    if (box.dataset.state === `${!!folderState.dir}|${folderState.perm}` && !force) return;
+    box.dataset.state = `${!!folderState.dir}|${folderState.perm}`;
+    if (!folderState.dir) {
+      box.replaceChildren(btn('Link my replay folder', async () => {
+        try { folderState.dir = await F.link(); folderState.perm = 'granted'; drawFolder(true); folderRun(true); } catch (e) { if (e.name !== 'AbortError') msg.textContent = `Couldn’t link it: ${e.message}`; }
+      }, 'primary'));
+      return;
+    }
+    box.replaceChildren(mk('span', 'tt-label', `Linked: ${folderState.dir.name}`),
+      btn(folderState.perm === 'granted' ? 'Check now' : 'Check my replay folder', () => folderRun(true), folderState.perm === 'granted' ? '' : 'primary'),
+      btn('Unlink', async () => { await F.unlink(); folderState.dir = null; folderState.perm = ''; msg.textContent = ''; drawFolder(true); }));
+    if (folderState.perm !== 'granted' && !msg.textContent) {
+      const r = await F.last();
+      msg.textContent = r ? `Last checked ${d3.timeFormat('%b %-d, %H:%M')(new Date(r.at))}: ${folderSummary(r)}` : 'Click to let the site look in the folder (your browser asks once per visit).';
+    }
+    // once per visit, without a click, when the browser still allows reading the folder
+    if (!folderState.autoDone && dash.data('review_list').status === 'ok') {
+      folderState.autoDone = true;
+      const p = await F.permission(folderState.dir, false).catch(() => 'denied');
+      if (p === 'granted') { folderState.perm = p; drawFolder(true); folderRun(false); }
+    }
+  }
   function drawReview(names) {
+    drawFolder();
     if (document.activeElement !== rvPlayer) {
       rvPlayer.replaceChildren(new Option('All players', ''), ...names.map((n) => new Option(steamOr(n), n)));
       rvPlayer.value = P().rp && names.includes(P().rp) ? P().rp : '';
