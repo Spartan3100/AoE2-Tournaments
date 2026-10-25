@@ -57,7 +57,7 @@ create table if not exists public.confirmations (
   primary key (tournament_id, match_id, side)
 );
 
--- Organizer changes made on the site (tournaments, players, rules, civ pools). Everyone invited sees them
+-- Organizer changes made on the site (tournaments, players, rules, civ pools, results entered by hand). Everyone invited sees them
 -- straight away; the update job saves them into config/ on GitHub and then clears them (site/js/admin-logic.js).
 create table if not exists public.admin_changes (
   id bigint generated always as identity primary key,
@@ -67,7 +67,7 @@ create table if not exists public.admin_changes (
   created_at timestamptz not null default now()
 );
 alter table public.admin_changes drop constraint if exists admin_changes_kind_check;
-alter table public.admin_changes add constraint admin_changes_kind_check check (kind in ('tournament', 'player', 'rules', 'civ_pool'));
+alter table public.admin_changes add constraint admin_changes_kind_check check (kind in ('tournament', 'player', 'rules', 'civ_pool', 'result'));
 
 -- ---------------------------------------------------------------- who may do what
 -- is_admin() means Owner (the name is kept because older policies and the site use it).
@@ -269,7 +269,7 @@ drop policy if exists "organizers add changes" on public.admin_changes;
 create policy "organizers add changes" on public.admin_changes for insert to authenticated with check (
   created_by = auth.uid() and (
     (kind = 'player' and public.is_organizer())
-    or (kind in ('tournament', 'rules', 'civ_pool') and (public.can_run(payload ->> 'tournament_id') or public.can_run_all()))
+    or (kind in ('tournament', 'rules', 'civ_pool', 'result') and (public.can_run(payload ->> 'tournament_id') or public.can_run_all()))
   )
 );
 drop policy if exists "organizers cancel changes" on public.admin_changes;

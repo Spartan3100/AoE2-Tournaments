@@ -247,3 +247,6 @@ html.tt-locked #dash-root { display: none; }
 .tt .tt-tabs button.tt-live-dot::after { content: ''; display: inline-block; width: 0.45em; height: 0.45em; margin-left: 0.35em; border-radius: 50%; background: var(--color-bad); vertical-align: 0.2em; }
 @keyframes tt-pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .tt .tt-live-mark { animation: none; } }
+
+/* Admin > Manage: a result entered by hand */
+#admin .adm-result { padding: var(--cds-pad-sm) 0; display: grid; gap: var(--cds-pad-sm); }
