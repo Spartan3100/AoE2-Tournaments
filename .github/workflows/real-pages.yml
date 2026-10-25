@@ -1,0 +1,39 @@
+# TEMPORARY (branch only, never merged): run the new pages on the real data in a browser; prints errors and counts only.
+name: Real pages check
+on:
+  push:
+    branches: ['claude/**']
+    paths: ['debug/**', '.github/workflows/real-pages.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install cryptography
+      - name: Real data, re-encrypted with a throwaway key for the stub backend
+        run: |
+          git fetch --depth 1 origin data
+          mkdir data_enc data
+          git archive FETCH_HEAD | tar -x -C data_enc
+          python pipeline/crypt.py decrypt data_enc data
+          export SITE_KEY=$(python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())")
+          mkdir -p _site && cp -r site/. _site/
+          python pipeline/crypt.py encrypt config _site/config --skip supabase.json
+          python pipeline/crypt.py encrypt data _site/data
+          rm -rf data data_enc
+          sed -i "s|__KEY__|$SITE_KEY|" debug/stub.js
+      - run: |
+          cd debug && npm init -y >/dev/null && npm i playwright@1.49.1 >/dev/null && npx playwright install --with-deps chromium >/dev/null
+          (cd ../_site && python -m http.server 8000 >/dev/null 2>&1 &)
+          sleep 1 && node real-pages.js
