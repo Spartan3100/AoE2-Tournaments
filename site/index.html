@@ -189,180 +189,189 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
   </section>
 
   <!-- ===================== Profiles ===================== -->
-  <section class="tt-page" id="profiles" hidden>
-    <div class="tt-controls">
-      <label class="tt-label" for="pp-player">Player</label>
-      <select id="pp-player" data-source="players"></select>
-      <div class="tt-chips" id="pp-scope" role="group" aria-label="Games"></div>
-      <div class="tt-chips" id="pp-period" role="group" aria-label="Period"></div>
+  <section class="tt-page pf" id="profiles" hidden>
+    <div class="tt-card pf-filters" role="group" aria-label="What to show">
+      <div class="pf-frow"><label class="pf-k" for="pp-player">Player</label><select id="pp-player" data-source="players"></select></div>
+      <div class="pf-frow"><span class="pf-k">View</span><div class="tt-chips" id="pp-scope" role="group" aria-label="Games"></div></div>
+      <div class="pf-frow"><span class="pf-k">Period</span><div class="tt-chips" id="pp-period" role="group" aria-label="Period"></div></div>
     </div>
 
-    <div class="tt-kpis" id="pp-kpis">
-      <div class="tt-card"><div class="tt-label">Games</div><div class="tt-kpi-v" data-k="games">—</div><div class="tt-kpi-s" data-k2="unknown"></div></div>
-      <div class="tt-card"><div class="tt-label">Win rate</div><div class="tt-kpi-v" data-k="win_rate">—</div></div>
-      <div class="tt-card"><div class="tt-label" id="pp-rating-label">Latest rating</div><div class="tt-kpi-v" data-k="rating_now">—</div><div class="tt-kpi-s" data-k2="rating_peak"></div></div>
-      <div class="tt-card"><div class="tt-label">Avg game (real min)</div><div class="tt-kpi-v" data-k="avg_minutes">—</div></div>
-      <div class="tt-card"><div class="tt-label">Best win streak</div><div class="tt-kpi-v" data-k="best_streak">—</div><div class="tt-kpi-s" data-k2="streak_now"></div></div>
-      <div class="tt-card"><div class="tt-label">Avg eAPM (replays)</div><div class="tt-kpi-v" data-k3="eapm">—</div><div class="tt-kpi-s" data-k3s="analyzed"></div></div>
-    </div>
+    <section class="tt-card pf-sec" id="pf-board-card" aria-label="Headline numbers"><div id="pf-board"></div></section>
 
-    <h3 class="tt-sec" id="pp-identity-h">Civ identity</h3>
-    <p class="tt-note">Across this player's games in the chosen period. "Best" needs at least 5 games with the civ.</p>
-    <div class="tt-id" id="pp-identity" data-source="p_identity"></div>
+    <section class="tt-card pf-sec" id="pf-rating-card">
+      <div class="pf-head"><h2 id="pf-rating-title">Rating over time</h2></div>
+      <p class="tt-note" id="pf-rating-note"></p>
+      <div id="pf-rating"></div>
+    </section>
 
-    <h3 class="tt-sec" id="pp-strategy-h">Strategy</h3>
-    <p class="tt-note">Read automatically from each game's replay: what they build, research and send where. <a href="#how" id="how-link">How strategies are read</a></p>
-    <p class="tt-note tt-warn" id="pp-coverage" hidden></p>
-    <div class="tt-card" id="pp-findings-card">
-      <h2>Scouting report</h2>
+    <section class="tt-card pf-sec" id="pf-civs-card">
+      <div class="pf-head"><h2>Civs</h2></div>
+      <p class="tt-note">Every civ played in this view. Tap a column heading to sort. The tick in each bar is 50%.</p>
+      <div id="pf-civs"></div>
+    </section>
+
+    <section class="tt-card pf-sec" id="pf-maps-card">
+      <div class="pf-head"><h2>Maps</h2>
+        <div class="tt-seg pf-seg" id="pf-maps-mode" role="group" aria-label="Maps view"><button type="button" data-mode="overall">Overall</button><button type="button" data-mode="month">By month</button></div></div>
+      <p class="tt-note" id="pf-maps-note"></p>
+      <div id="pf-maps"></div>
+    </section>
+
+    <section class="tt-card pf-sec" id="pf-vs-card">
+      <div class="pf-head"><h2>Matchups vs opponent civs</h2></div>
+      <p class="tt-note" id="pf-vs-note">1v1 games, by the civ the opponent played.</p>
+      <div id="pf-vs"></div>
+    </section>
+
+    <section class="tt-card pf-sec" id="pf-when-card">
+      <div class="pf-head"><h2>Game length &amp; time of day</h2></div>
+      <div class="pf-two">
+        <div><h3 class="pf-subh">Win rate by game length</h3><div id="pf-length"></div>
+          <p class="tt-note">Real-time minutes. Faded bars have fewer than 5 games.</p></div>
+        <div><h3 class="pf-subh">When they play</h3><div id="pf-hours"></div>
+          <p class="tt-note" id="pf-hours-note">Day and hour the game started, in your local time. Darker means more games.</p></div>
+      </div>
+    </section>
+
+    <section class="tt-card pf-sec" id="pf-strat-card">
+      <div class="pf-head"><h2>Strategy from replays</h2></div>
+      <p class="tt-note"><span id="pf-strat-note"></span> <a href="#how" id="how-link">How strategies are read</a></p>
+      <div id="pf-strat"></div>
+    </section>
+
+    <section class="tt-card pf-sec" id="pf-form-card">
+      <div class="pf-head"><h2>Recent form</h2></div>
+      <div id="pf-form"></div>
+    </section>
+
+    <section class="tt-card pf-sec" id="pf-team-card">
+      <div class="pf-head"><h2>Team games</h2></div>
+      <p class="tt-note" id="pf-team-note"></p>
+      <div class="pf-two">
+        <div><h3 class="pf-subh">Win rate by teammate</h3><div id="pf-mates"></div></div>
+        <div><h3 class="pf-subh">Best civ combos</h3><div id="pf-combos"></div></div>
+      </div>
+    </section>
+
+    <!-- Deeper analysis: the earlier profile content, restyled -->
+    <h2 class="pf-part" id="pf-deeper">Deeper analysis</h2>
+    <p class="tt-note pf-part-note">More detail for the same player. Civ identity uses the chosen period; the rest also uses the chosen view unless it says otherwise.</p>
+
+    <section class="tt-card pf-sec" id="pp-identity-card">
+      <div class="pf-head"><h2 id="pp-identity-h">Civ identity</h2></div>
+      <p class="tt-note">Across this player's games in the chosen period. "Best" needs at least 5 games with the civ.</p>
+      <div class="tt-id" id="pp-identity" data-source="p_identity"></div>
+    </section>
+
+    <section class="tt-card pf-sec" id="pp-findings-card">
+      <div class="pf-head"><h2>Scouting report</h2></div>
       <p class="tt-note">The patterns that stand out in this view.</p>
+      <p class="tt-note tt-warn" id="pp-coverage" hidden></p>
       <ul class="tt-rules" id="pp-findings"></ul>
-    </div>
+    </section>
+
     <div class="tt-grid">
-      <div class="tt-card" id="pp-open-card">
-        <h2>Openings</h2>
-        <p class="tt-note">Dark and Feudal Age plan, with win rate and average age-up times.</p>
-        <div class="tt-scroll"><table id="pp-open" data-source="s_openings" data-row-key="player,scope,opening"><thead></thead><tbody></tbody></table></div>
-      </div>
-      <div class="tt-card" id="pp-castle-card">
-        <h2>Castle Age plans</h2>
-        <p class="tt-note">What they do after reaching Castle Age.</p>
+      <section class="tt-card pf-sec" id="pp-castle-card">
+        <div class="pf-head"><h2>Castle Age plans</h2></div>
+        <p class="tt-note">What they do after reaching Castle Age, from replays.</p>
         <div class="tt-scroll"><table id="pp-castle" data-source="s_castle" data-row-key="player,scope,castle_plan"><thead></thead><tbody></tbody></table></div>
-      </div>
-    </div>
-    <div class="tt-grid">
-      <div class="tt-card" id="pp-attack-card">
-        <h2>Attack style</h2>
+      </section>
+      <section class="tt-card pf-sec" id="pp-attack-card">
+        <div class="pf-head"><h2>Attack style</h2></div>
         <p class="tt-note">When their army first reaches the enemy base, and how often it goes back.</p>
         <div class="tt-scroll"><table id="pp-attack" data-source="s_attack" data-row-key="player,scope,attack_style"><thead></thead><tbody></tbody></table></div>
-      </div>
-      <div class="tt-card" id="pp-defense-card">
-        <h2>Defense style</h2>
-        <p class="tt-note">Walls, towers and castles at home, and counter units.</p>
-        <div class="tt-scroll"><table id="pp-defense" data-source="s_defense" data-row-key="player,scope,defense_style"><thead></thead><tbody></tbody></table></div>
-      </div>
+      </section>
     </div>
     <div class="tt-grid">
-      <div class="tt-card" id="pp-tempo-card">
-        <h2>Tempo: wins vs losses</h2>
+      <section class="tt-card pf-sec" id="pp-defense-card">
+        <div class="pf-head"><h2>Defense style</h2></div>
+        <p class="tt-note">Walls, towers and castles at home, and counter units.</p>
+        <div class="tt-scroll"><table id="pp-defense" data-source="s_defense" data-row-key="player,scope,defense_style"><thead></thead><tbody></tbody></table></div>
+      </section>
+      <section class="tt-card pf-sec" id="pp-tempo-card">
+        <div class="pf-head"><h2>Tempo: wins vs losses</h2></div>
         <p class="tt-note">Average minutes (game time) to each age and to the first attack.</p>
         <div class="tt-scroll"><table id="pp-tempo" data-source="s_tempo" data-row-key="player,scope,result"><thead></thead><tbody></tbody></table></div>
-      </div>
-      <div class="tt-card" id="pp-units-card">
-        <h2>Army composition</h2>
-        <p class="tt-note">Share of military units queued, from replays.</p>
-        <div class="tt-chart" id="pp-units" data-source="s_units"></div>
-      </div>
+      </section>
     </div>
+    <section class="tt-card pf-sec" id="pp-units-card">
+      <div class="pf-head"><h2>Army composition</h2></div>
+      <p class="tt-note">Share of military units queued, from replays (top 10 unit types).</p>
+      <div id="pp-units" data-source="s_units"></div>
+    </section>
 
-    <h3 class="tt-sec" id="pp-compare-h">Compare periods</h3>
-    <div class="tt-card" id="pp-seasons-card">
-      <h2>Seasons</h2>
+    <section class="tt-card pf-sec" id="pp-seasons-card">
+      <div class="pf-head"><h2 id="pp-compare-h">Compare periods: seasons</h2></div>
       <p class="tt-note">Every calendar year and every tournament, across all game types. Rating is 1v1 ranked, from the first to the last ranked game in the season.</p>
       <div class="tt-scroll"><table id="pp-seasons" data-source="p_seasons" data-row-key="player,season"><thead></thead><tbody></tbody></table></div>
-    </div>
-    <div class="tt-card" id="pp-range-card">
-      <h2>Custom date ranges</h2>
-      <p class="tt-note">Pick any two date ranges to compare side by side. Uses the game type chosen at the top.</p>
-      <div class="tt-controls">
+    </section>
+    <section class="tt-card pf-sec" id="pp-range-card">
+      <div class="pf-head"><h2>Custom date ranges</h2></div>
+      <p class="tt-note">Pick any two date ranges to compare side by side. Uses the view chosen at the top.</p>
+      <div class="tt-controls pf-ranges">
         <div class="tt-range"><span class="tt-label">Range A</span><input type="date" id="cr-a1" min="2020-01-01" max="2099-12-31" aria-label="Range A from"><span class="tt-label">to</span><input type="date" id="cr-a2" min="2020-01-01" max="2099-12-31" aria-label="Range A to"></div>
         <div class="tt-range"><span class="tt-label">Range B</span><input type="date" id="cr-b1" min="2020-01-01" max="2099-12-31" aria-label="Range B from"><span class="tt-label">to</span><input type="date" id="cr-b2" min="2020-01-01" max="2099-12-31" aria-label="Range B to"></div>
         <button type="button" class="tt-btn" id="cr-reset">This year vs last year</button>
       </div>
       <div class="tt-scroll" id="pp-range-box" data-source="history"><table id="pp-range"><thead></thead><tbody></tbody></table></div>
-    </div>
+    </section>
 
-    <h3 class="tt-sec">Results</h3>
-    <div class="tt-card" id="pp-rating-card">
-      <h2 id="pp-rating-title">Rating over time</h2>
-      <p class="tt-note">Rating after each ranked game: 1v1 and team.</p>
-      <div class="tt-chart" id="pp-rating" data-source="history"></div>
-    </div>
-    <div class="tt-grid">
-      <div class="tt-card" id="pp-style-card">
-        <h2>Civ styles played</h2>
-        <p class="tt-note">Share of games by the civ's main strength, with win rate.</p>
-        <div class="tt-chart" id="pp-style" data-source="p_styles"></div>
-      </div>
-      <div class="tt-card" id="pp-length-card">
-        <h2>Win rate by game length</h2>
-        <p class="tt-note">Real-time minutes. Short games favour rushes, long games favour booms.</p>
-        <div class="tt-chart" id="pp-length" data-source="p_length"></div>
-      </div>
-    </div>
-    <div class="tt-grid">
-      <div class="tt-card" id="pp-civs-card">
-        <h2>Civs</h2>
-        <p class="tt-note">Most-played civs and how often they win with them.</p>
-        <div class="tt-scroll tt-tall"><table id="pp-civs" data-source="p_civs" data-row-key="player,scope,civ"><thead></thead><tbody></tbody></table></div>
-      </div>
-      <div class="tt-card" id="pp-maps-card">
-        <h2>Maps</h2>
-        <p class="tt-note">Results on each map.</p>
-        <div class="tt-scroll tt-tall"><table id="pp-maps" data-source="p_maps" data-row-key="player,scope,map"><thead></thead><tbody></tbody></table></div>
-      </div>
-    </div>
-    <div class="tt-grid">
-      <div class="tt-card" id="pp-vs-card">
-        <h2>Against opponent civs</h2>
-        <p class="tt-note">1v1 results by the civ the opponent played.</p>
-        <div class="tt-scroll tt-tall"><table id="pp-vs" data-source="p_vs_civ" data-row-key="player,scope,opp_civ"><thead></thead><tbody></tbody></table></div>
-      </div>
-      <div class="tt-card" id="pp-tourn-card">
-        <h2>Tournament record</h2>
-        <p class="tt-note">Pool play results in every tournament they entered.</p>
-        <div class="tt-scroll"><table id="pp-tourn" data-source="standings" data-row-key="tournament_id,player"><thead></thead><tbody></tbody></table></div>
-      </div>
-    </div>
-    <div class="tt-card" id="pp-recent-card">
-      <h2>Recent games</h2>
-      <p class="tt-note">The latest 40 games in this view. Click an analyzed game to review it.</p>
-      <div class="tt-scroll tt-tall"><table id="pp-recent" data-source="history" data-row-key="player,match_id"><thead></thead><tbody></tbody></table></div>
-    </div>
-    <div class="tt-card" id="how">
-      <h2>How strategies are read</h2>
+    <section class="tt-card pf-sec" id="pp-tourn-card">
+      <div class="pf-head"><h2>Tournament record</h2></div>
+      <p class="tt-note">Pool play results in every tournament they entered. Tap one to open its standings.</p>
+      <div class="tt-scroll"><table id="pp-tourn" data-source="standings" data-row-key="tournament_id,player"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="tt-card pf-sec" id="how">
+      <div class="pf-head"><h2>How strategies are read</h2></div>
       <p class="tt-note">From each game's replay file, which records every command a player gives.</p>
       <ul class="tt-rules">
-        <li><b>Opening:</b> units made before Castle Age. 3 or more militia in Dark Age is a Drush; towers built near the enemy is a tower rush; Castle Age within about 5½ minutes of Feudal with fewer than 4 military units is Fast Castle; otherwise the most-made Feudal unit (scouts, archers, men-at-arms, skirms & spears).</li>
+        <li><b>Opening:</b> units made before Castle Age. 3 or more militia in Dark Age is a Drush; towers built near the enemy is a tower rush; Castle Age within about 5½ minutes of Feudal with fewer than 4 military units is Fast Castle; otherwise the most-made Feudal unit (scouts, archers, men-at-arms, skirms &amp; spears).</li>
         <li><b>Castle Age plan:</b> 2 or more extra Town Centers in Castle Age is a boom; otherwise the most-made Castle Age unit type.</li>
         <li><b>Attack style:</b> when the army is first ordered into the enemy's base (the starting scout doesn't count). Before 12 minutes is early pressure, 12–22 mid-game, later is a late attacker. Many separate minutes of raids add "constant raids"; 3+ siege units used aggressively add "siege pushes".</li>
         <li><b>Defense style:</b> 15+ wall tiles by Feudal Age, 25+ wall tiles in total, 3+ towers or castles near home, a third or more of the army as skirmishers or spearmen.</li>
         <li><b>Times</b> are game time; unit counts are units queued, so a few may have been cancelled.</li>
       </ul>
-    </div>
+    </section>
   </section>
 
   <!-- ===================== Head to head ===================== -->
-  <section class="tt-page" id="rivals" hidden>
-    <div class="tt-controls">
-      <label class="tt-label" for="hh-a">Player</label>
-      <select id="hh-a" data-source="players"></select>
-      <span class="tt-label">vs</span>
-      <select id="hh-b" data-source="players" aria-label="Opponent"></select>
-      <div class="tt-chips" id="hh-period" role="group" aria-label="Period"></div>
-    </div>
-    <div class="tt-kpis" id="hh-kpis">
-      <div class="tt-card"><div class="tt-label">1v1 record</div><div class="tt-kpi-v" id="hh-record">—</div><div class="tt-kpi-s" id="hh-rate"></div></div>
-      <div class="tt-card"><div class="tt-label">Team games against each other</div><div class="tt-kpi-v" id="hh-teamvs">—</div><div class="tt-kpi-s" id="hh-teamvs-s"></div></div>
-      <div class="tt-card"><div class="tt-label">Team games together</div><div class="tt-kpi-v" id="hh-with">—</div><div class="tt-kpi-s" id="hh-with-s"></div></div>
-      <div class="tt-card"><div class="tt-label">Last played each other</div><div class="tt-kpi-v" id="hh-last">—</div></div>
-    </div>
-    <div class="tt-grid">
-      <div class="tt-card" id="hh-maps-card">
-        <h2>By map</h2>
-        <p class="tt-note">Their 1v1s against each other on each map, from the first player's side.</p>
-        <div class="tt-scroll tt-tall"><table id="hh-maps" data-source="rival_maps" data-row-key="a,b,period,map"><thead></thead><tbody></tbody></table></div>
+  <section class="tt-page cmp" id="rivals" hidden>
+    <div class="tt-card cmp-bar">
+      <div class="cmp-ctl">
+        <label class="tt-label" for="hh-a">Player</label>
+        <select id="hh-a" data-source="players"></select>
       </div>
-      <div class="tt-card" id="hh-civs-card">
-        <h2>Civs picked</h2>
-        <p class="tt-note">The civ the first player chose in these 1v1s, and how it went.</p>
-        <div class="tt-scroll tt-tall"><table id="hh-civs" data-source="rival_civs" data-row-key="a,b,period,civ"><thead></thead><tbody></tbody></table></div>
+      <div class="cmp-ctl">
+        <span class="tt-label">Period</span>
+        <div class="cmp-seg" id="hh-period" role="group" aria-label="Period"></div>
       </div>
     </div>
-    <div class="tt-card" id="hh-games-card">
-      <h2>Games against each other</h2>
-      <p class="tt-note">Every 1v1 and team game they played on opposite sides in this period, newest first.</p>
-      <div class="tt-scroll tt-tall"><table id="hh-games" data-source="history" data-row-key="player,match_id"><thead></thead><tbody></tbody></table></div>
+    <div class="tt-card" id="cmp-all">
+      <h2 id="cmp-all-title">Against everyone</h2>
+      <p class="tt-note" id="cmp-all-note"></p>
+      <div class="tt-scroll"><table id="cmp-all-table" data-source="rivals"><thead></thead><tbody id="cmp-all-body"></tbody></table></div>
+    </div>
+    <div class="cmp-pair" id="cmp-pair">
+      <div class="tt-card cmp-pairbar">
+        <div class="cmp-ctl">
+          <label class="tt-label" for="hh-a2">Player A</label>
+          <select id="hh-a2" data-source="players"></select>
+        </div>
+        <button type="button" class="tt-btn cmp-swap" id="hh-swap" aria-label="Swap the two players" title="Swap the two players">⇄ Swap</button>
+        <div class="cmp-ctl">
+          <label class="tt-label" for="hh-b">Player B</label>
+          <select id="hh-b" data-source="players"></select>
+        </div>
+      </div>
+      <div class="cmp-grid2">
+        <div class="tt-card" id="cmp-h2h"></div>
+        <div class="tt-card" id="cmp-side"></div>
+      </div>
+      <div class="tt-card" id="cmp-rating"></div>
+      <div class="tt-card" id="cmp-meet"></div>
+      <div class="tt-card" id="cmp-team"></div>
+      <div class="tt-card" id="cmp-scout"></div>
     </div>
   </section>
 
