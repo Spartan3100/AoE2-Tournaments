@@ -24,14 +24,15 @@
   "series_game": null,
   "player_a": "Nathan",
   "player_b": "Ryan",
-  "status": "Scheduled",
-  "winner": "",
-  "civ_a": "",
-  "civ_b": "",
-  "map": "",
-  "duration_min": null,
-  "played_at": "",
-  "match_id": ""
+  "status": "Final",
+  "winner": "Nathan",
+  "civ_a": "Ethiopians",
+  "civ_b": "Malay",
+  "map": "Arabia",
+  "duration_min": 26.8,
+  "played_at": "10/24/2026 22:28:31",
+  "match_id": "516093931",
+  "confirmed_by": "organizer"
  },
  {
   "tournament_id": "t1",
@@ -114,7 +115,7 @@
   "civ_a": "Turks",
   "civ_b": "Spanish",
   "map": "Arabia",
-  "duration_min": 22.0,
+  "duration_min": 22,
   "played_at": "10/19/2026 03:40:09",
   "match_id": "514756336"
  },
