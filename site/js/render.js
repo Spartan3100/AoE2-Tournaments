@@ -810,6 +810,49 @@
     }));
   }
 
+  // ---------------------------------------------------------------- "Sync now"
+  // Starts the update job (new games, replays, uploads, the site) through request_sync() in Supabase, then follows the
+  // run on GitHub's public API until it finishes; new data needs a reload, since the site's files are replaced.
+  const GH_RUNS = 'https://api.github.com/repos/Spartan3100/AoE2-Tournaments/actions/workflows/update.yml/runs?per_page=5';
+  const SYNC = { phase: '', text: '', at: 0, timer: null };
+  const syncSay = (phase, text) => {
+    SYNC.phase = phase; SYNC.text = text;
+    document.querySelectorAll('.tt-sync-msg').forEach((n) => { n.textContent = text; });
+    document.querySelectorAll('.tt-sync-btn').forEach((b) => {
+      b.disabled = phase === 'starting' || phase === 'running';
+      b.textContent = phase === 'done' ? 'Reload to see it' : phase === 'running' || phase === 'starting' ? 'Syncing…' : 'Sync now';
+    });
+  };
+  async function syncFollow() {
+    clearTimeout(SYNC.timer);
+    if (Date.now() - SYNC.at > 25 * 60e3) { syncSay('', 'The sync is taking longer than usual; new games show up when it finishes.'); return; }
+    try {
+      const st = SYNC.at && Date.now() - SYNC.at > 15e3 && SYNC.at + 120e3 > Date.now() ? await window.TT_SYNC.status() : null;
+      if (st && st.code && st.code !== 204) { syncSay('', `GitHub refused the sync (${st.code}). The owner needs to check the sync token (README, "Sync now").`); return; }
+      const r = await fetch(GH_RUNS, { cache: 'no-store' });
+      const runs = r.ok ? (await r.json()).workflow_runs || [] : [];
+      const run = runs.find((x) => Date.parse(x.created_at) >= SYNC.at - 90e3);
+      if (run && run.status === 'completed') {
+        syncSay(run.conclusion === 'success' ? 'done' : '', run.conclusion === 'success' ? `Synced at ${d3.timeFormat('%H:%M')(new Date(run.updated_at))}. Reload to see new games.` : 'The sync didn’t finish properly; the next scheduled update will try again.');
+        return;
+      }
+      if (run) syncSay('running', `Syncing: ${run.status === 'queued' ? 'waiting for its turn' : `running since ${d3.timeFormat('%H:%M')(new Date(run.run_started_at || run.created_at))}`}. Usually 5–10 minutes.`);
+    } catch (e) { /* try again next tick */ }
+    SYNC.timer = setTimeout(syncFollow, 20e3);
+  }
+  async function syncNow() {
+    if (SYNC.phase === 'done') { location.reload(); return; }
+    if (!window.TT_SYNC || !TT_SYNC.can()) { syncSay('', 'Players and organizers can start a sync.'); return; }
+    syncSay('starting', 'Starting a sync…');
+    try {
+      const res = await window.TT_SYNC.request();
+      SYNC.at = res && res.at ? Date.parse(res.at) : Date.now();
+      syncSay('running', res && res.ok === false ? res.message : 'Sync started. Looking for new games and replays; usually 5–10 minutes.');
+      SYNC.timer = setTimeout(syncFollow, 8e3);
+    } catch (e) { syncSay('', `Couldn’t start a sync: ${e.message || e}`); }
+  }
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('.tt-sync-btn'); if (b) syncNow(); });
+
   // ---------------------------------------------------------------- home
   function drawHome(tid, names, strows) {
     // freshness
@@ -824,8 +867,17 @@
         mk('b', '', hrs > 12 ? '⚠ Data may be out of date' : fails ? `⚠ ${fails} data check${fails > 1 ? 's' : ''} failed` : '✓ Data up to date'),
         document.createTextNode(` · Last updated and checked ${ago(hrs)} (${d3.utcFormat('%b %-d, %H:%M UTC')(new Date(at))}). The site updates every 30 minutes${window.TT_LIVE && TT_LIVE.fetchedAt ? `; newest games loaded live at ${d3.timeFormat('%H:%M')(TT_LIVE.fetchedAt)}` : ''}.`),
         btn('See the data check', () => show('check', true)),
+        (() => { const b = btn(SYNC.phase === 'done' ? 'Reload to see it' : SYNC.phase ? 'Syncing…' : 'Sync now', () => {}, 'tt-sync-btn'); b.disabled = SYNC.phase === 'starting' || SYNC.phase === 'running'; return b; })(),
+        mk('span', 'tt-label tt-sync-msg', SYNC.text),
       );
     } else if (dc.status === 'error') { fresh.className = 'tt-banner bad'; fresh.textContent = 'Couldn’t load when the data was last updated.'; }
+    // "Sync now" whatever the data check says (it's also in the account menu)
+    if (dc.status !== 'ok' || !dc.data.length) {
+      if (dc.status !== 'error') fresh.textContent = 'Checking when the data was last updated…';
+      const b = btn(SYNC.phase === 'done' ? 'Reload to see it' : SYNC.phase ? 'Syncing…' : 'Sync now', () => {}, 'tt-sync-btn');
+      b.disabled = SYNC.phase === 'starting' || SYNC.phase === 'running';
+      fresh.append(' ', b, mk('span', 'tt-label tt-sync-msg', SYNC.text));
+    }
 
     const md = dash.data('matches');
     const ms = md.status === 'ok' ? md.data.filter((m) => m.tournament_id === tid) : [];

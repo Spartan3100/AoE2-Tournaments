@@ -332,6 +332,59 @@ create policy "remove own replay files" on storage.objects for delete to authent
   bucket_id = 'replays' and (storage.foldername(name))[1] = auth.uid()::text
 );
 
+-- ---------------------------------------------------------------- "Sync now"
+-- A player or organizer can start the update job (new games, replays, the site) without waiting for the next half
+-- hour. The site calls request_sync(); it asks GitHub to run .github/workflows/update.yml, using a GitHub token kept
+-- in Supabase Vault (never in the site). One sync at most every 5 minutes, for everyone together.
+-- Setup, once (the owner): see README "Sync now". In short: make a fine-grained GitHub token for this repository with
+-- "Actions: Read and write", then run, with the token pasted in place of the placeholder:
+--   select vault.create_secret('github_pat_...', 'github_sync_token');
+-- (to replace it later: select vault.update_secret((select id from vault.secrets where name = 'github_sync_token'), 'github_pat_...');)
+create extension if not exists pg_net;
+create table if not exists public.sync_requests (
+  id bigint generated always as identity primary key,
+  requested_by uuid default auth.uid() references auth.users (id) on delete set null,
+  requested_at timestamptz not null default now(),
+  net_id bigint
+);
+alter table public.sync_requests enable row level security;
+drop policy if exists "read syncs" on public.sync_requests;
+create policy "read syncs" on public.sync_requests for select to authenticated using (public.is_member());
+
+create or replace function public.request_sync() returns json
+language plpgsql security definer set search_path = public, extensions as $$
+declare last timestamptz; tok text; rid bigint;
+begin
+  if not public.can_add_replays() then raise exception 'Players and organizers can start a sync'; end if;
+  select max(requested_at) into last from public.sync_requests;
+  if last > now() - interval '5 minutes' then
+    return json_build_object('ok', false, 'at', last, 'message', 'A sync was started less than 5 minutes ago. It''s running now.');
+  end if;
+  select decrypted_secret into tok from vault.decrypted_secrets where name = 'github_sync_token';
+  if tok is null then raise exception 'Sync isn''t set up yet: the owner needs to add the GitHub token (README, "Sync now")'; end if;
+  select net.http_post(
+    url := 'https://api.github.com/repos/Spartan3100/AoE2-Tournaments/actions/workflows/update.yml/dispatches',
+    body := jsonb_build_object('ref', 'main'),
+    headers := jsonb_build_object('Authorization', 'Bearer ' || tok, 'Accept', 'application/vnd.github+json',
+      'X-GitHub-Api-Version', '2022-11-28', 'User-Agent', 'aoe2-tournaments', 'Content-Type', 'application/json')
+  ) into rid;
+  insert into public.sync_requests (requested_by, net_id) values (auth.uid(), rid);
+  return json_build_object('ok', true, 'at', now());
+end $$;
+
+-- what GitHub answered to the latest request (204 = started; 401/403/404 = the token is wrong or lacks Actions access)
+create or replace function public.sync_status() returns json
+language plpgsql stable security definer set search_path = public, extensions as $$
+declare r record; code int; msg text;
+begin
+  if not public.is_member() then return null; end if;
+  select * into r from public.sync_requests order by id desc limit 1;
+  if r is null then return json_build_object('at', null); end if;
+  select status_code, coalesce(error_msg, left(content, 200)) into code, msg from net._http_response where id = r.net_id;
+  return json_build_object('at', r.requested_at, 'code', code, 'message', msg);
+end $$;
+grant execute on function public.request_sync(), public.sync_status() to authenticated;
+
 -- Last step: make yourself the owner. Replace the address with the email on the account you'll sign in with
 -- (for Discord, your Discord account's email), then run just this line.
 -- insert into public.admins (email) values ('you@example.com') on conflict do nothing;
