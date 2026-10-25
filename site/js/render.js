@@ -144,10 +144,10 @@
     const x = d3.scaleLinear([0, max || 1], [0, Math.max(10, W - labW - valW - 24)]);
     const tip = d3.select(box).append('div').attr('class', 'tt-tip').style('display', 'none');
     const g = svg.selectAll('g').data(rows).join('g').attr('transform', (d, i) => `translate(0,${i * rowH + 4})`);
-    g.append('text').attr('x', labW).attr('y', 14).attr('text-anchor', 'end').attr('font-size', 12)
+    g.append('text').attr('x', labW).attr('y', 16).attr('text-anchor', 'end').attr('font-size', 12)
       .attr('fill', 'var(--color-fg)').text((d) => d[labelKey]);
     g.append('rect').attr('x', labW + 8).attr('y', 4).attr('height', 16).attr('rx', 4)
-      .attr('width', (d) => Math.max(2, x(d[valueKey]))).attr('fill', dash.colors[0]);
+      .attr('width', (d) => Math.max(2, x(d[valueKey]))).attr('fill', 'var(--color-accent)');
     g.append('text').attr('x', (d) => labW + 12 + Math.max(2, x(d[valueKey]))).attr('y', 16).attr('font-size', 12)
       .attr('fill', 'var(--color-fg-muted)').text((d) => fmt(d[valueKey]));
     g.on('mousemove', (event, d) => {
@@ -412,6 +412,7 @@
   // datasets load when first asked for; the sheet can open before Games ever has
   const loaded = async (id) => { const t0 = Date.now(); while (dash.data(id).status === 'loading' && Date.now() - t0 < 15000) await new Promise((r) => setTimeout(r, 200)); return dash.data(id); };
   function openUpload() {
+    upOpener = document.activeElement;
     dash.data('review_list');
     upSheet.hidden = false; upFiles.value = ''; upList.replaceChildren(); upPairs = []; upSend.disabled = true;
     const up = window.TT_UPLOAD;
@@ -420,12 +421,19 @@
     el('upload-folder').hidden = !(window.TT_FOLDER && TT_FOLDER.supported);
     upFiles.focus();
   }
-  const closeUpload = () => { upSheet.hidden = true; };
+  let upOpener = null;
+  const closeUpload = () => { upSheet.hidden = true; if (upOpener && upOpener.offsetParent) upOpener.focus(); upOpener = null; };
   el('upload-open').addEventListener('click', openUpload);
   el('upload-open-2').addEventListener('click', openUpload);
   el('upload-close').addEventListener('click', closeUpload);
   upSheet.addEventListener('click', (e) => { if (e.target === upSheet) closeUpload(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !upSheet.hidden) closeUpload(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!upSheet.hidden) closeUpload();
+    else if (el('account').open) { el('account').open = false; el('account').querySelector('summary').focus(); }
+  });
+  // the account menu closes when you click or tap anywhere else
+  document.addEventListener('click', (e) => { const a = el('account'); if (a.open && !a.contains(e.target)) a.open = false; });
   el('upload-folder').addEventListener('click', () => { closeUpload(); show('review', true); setTimeout(() => el('rv-folder-card').scrollIntoView({ behavior: 'smooth' }), 50); });
   upFiles.addEventListener('change', async () => {
     upMsg.textContent = 'Matching to your games…';
@@ -766,13 +774,16 @@
     if (ready) applyGame(ready);
   }
 
-  // ---------------------------------------------------------------- live now (Home), and a dot on the Home tab
+  // ---------------------------------------------------------------- live now (Home), and a dot on Home
   // games a tracked player is in right now (dash.js TT_LIVE.ongoing, from AoE2 Companion). "Spectate in AoE2" uses the
   // game's own link, aoe2de://1/<match id>, which opens Age of Empires II: DE spectating that match.
   function drawLive() {
     const games = (window.TT_LIVE && TT_LIVE.ongoing) || [];
-    el('tab-home').classList.toggle('tt-live-dot', games.length > 0);
-    el('tab-home').title = games.length ? `${games.length} game${games.length > 1 ? 's' : ''} live now` : '';
+    // Home has no page tab of its own any more, so the dot goes on the Home section buttons (header and phone bottom bar)
+    document.querySelectorAll('[data-section="home"]').forEach((b) => {
+      b.classList.toggle('tt-live-dot', games.length > 0);
+      b.title = games.length ? `${games.length} game${games.length > 1 ? 's' : ''} live now` : '';
+    });
     const card = el('home-live-card');
     card.hidden = !games.length;
     if (!games.length) return;
@@ -873,7 +884,8 @@
     } else if (dc.status === 'error') { fresh.className = 'tt-banner bad'; fresh.textContent = 'Couldn’t load when the data was last updated.'; }
     // "Sync now" whatever the data check says (it's also in the account menu)
     if (dc.status !== 'ok' || !dc.data.length) {
-      if (dc.status !== 'error') fresh.textContent = 'Checking when the data was last updated…';
+      if (dc.status === 'loading') fresh.textContent = 'Checking when the data was last updated…';
+      else if (dc.status !== 'error') { fresh.className = 'tt-banner'; fresh.textContent = 'No data check yet: the first one runs with the next update (every 30 minutes).'; }
       const b = btn(SYNC.phase === 'done' ? 'Reload to see it' : SYNC.phase ? 'Syncing…' : 'Sync now', () => {}, 'tt-sync-btn');
       b.disabled = SYNC.phase === 'starting' || SYNC.phase === 'running';
       fresh.append(' ', b, mk('span', 'tt-label tt-sync-msg', SYNC.text));
@@ -908,7 +920,7 @@
         if (rr && rr.games) sub.append('All-time 1v1s against them: ', mark('rivals', { a: ME.player, b: opp, period: 'All time' }, 'wins', num(rr.wins), 'span'), ' won, ', mark('rivals', { a: ME.player, b: opp, period: 'All time' }, 'losses', num(rr.losses), 'span'), ' lost.');
         else if (rr) sub.textContent = 'You haven’t played a 1v1 against them yet.';
         const b = mk('div', 'tt-btns');
-        b.append(btn('Head to head ›', () => { dash.setParams({ ha: ME.player, hb: opp }); show('rivals', true); }),
+        b.append(btn('Compare ›', () => { dash.setParams({ ha: ME.player, hb: opp }); show('rivals', true); }),
           btn('My profile ›', () => { dash.setParams({ pp: ME.player }); show('profiles', true); }));
         meBox.replaceChildren(line, sub, b);
       }
@@ -1084,6 +1096,7 @@
     ];
     const lab = (k1, k2) => `${fmtDay(crVal(k1))} – ${fmtDay(crVal(k2))}`;
     rt.tHead.replaceChildren((() => { const tr = mk('tr'); [['', ''], [`A: ${lab('ca1', 'ca2')}`, 'num'], [`B: ${lab('cb1', 'cb2')}`, 'num'], ['A vs B', 'num']].forEach(([x, c]) => { const th = mk('th', c, x); tr.append(th); }); return tr; })());
+    if (!A.games && !B.games) { const tr = mk('tr'), td = mk('td', 'tt-empty', 'No games in either date range for this view. Pick other dates, or another view at the top.'); td.colSpan = 4; tr.append(td); rt.tBodies[0].replaceChildren(tr); return; }
     rt.tBodies[0].replaceChildren(...metrics.map(([label, a, b, f, d]) => {
       const tr = mk('tr');
       const diff = d(a, b);
@@ -1332,6 +1345,7 @@
         const at = dc.data[0] && dc.data[0].checked_at;
         el('check-note').textContent = `After every update the job re-checks the dashboard against AoE2 Companion (a separate site that records the same games) and against itself.${at ? ` Last checked ${d3.utcFormat('%b %-d, %H:%M UTC')(new Date(at))}.` : ''}`;
       } else if (dc.status === 'error') failed(t.tBodies[0]);
+      else if (dc.status === 'missing') fillTable(t, [], [{ field: 'status', label: 'Result' }, { field: 'check', label: 'Check' }, { field: 'result', label: 'Found' }], 'check', { emptyText: 'No data check yet. The first one runs with the next update (every 30 minutes).' });
       const h = dash.data('history');
       const st2 = el('spot-table');
       if (h.status === 'ok') {

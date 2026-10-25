@@ -149,7 +149,7 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
   <section class="tt-page" id="schedule" hidden>
     <div class="tt-card" id="schedule-card">
       <h2>Game schedule</h2>
-      <p class="tt-note">Every scheduled game in this tournament. A result shows up here once both players confirm the game (Home tab) or the organizer approves it. Click a played game to review it.</p>
+      <p class="tt-note">Every scheduled game in this tournament. A result shows up here once both players confirm the game (on Home) or the organizer approves it. Click a played game to review it.</p>
       <div class="tt-scroll"><table id="schedule-table" data-source="matches" data-row-key="tournament_id,game"><thead></thead><tbody></tbody></table></div>
     </div>
   </section>
@@ -338,7 +338,7 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
     </section>
   </section>
 
-  <!-- ===================== Head to head ===================== -->
+  <!-- ===================== Players > Compare ===================== -->
   <section class="tt-page cmp" id="rivals" hidden>
     <div class="tt-card cmp-bar">
       <div class="cmp-ctl">
@@ -378,7 +378,7 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
     </div>
   </section>
 
-  <!-- ===================== Match review ===================== -->
+  <!-- ===================== Games ===================== -->
   <section class="tt-page" id="review" hidden>
     <div class="tt-card tt-folder" id="rv-folder-card" hidden>
       <h2>Your replay folder</h2>

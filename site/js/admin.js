@@ -127,7 +127,7 @@
       if (Number(c.bo) >= 3) out.push({ label: `Game ${c.bo} (if needed)`, text: `${c.decider || 'Arabia'}.` });
       if (Number(c.bo) > 3) out.push({ label: 'Other games', text: 'The loser of the previous game picks the map.' });
     }
-    if (Number(c.poolSize)) out.push({ label: 'Civs', text: `Each player plays from their own pool of ${c.poolSize} civs, listed on the Civs & maps tab.` });
+    if (Number(c.poolSize)) out.push({ label: 'Civs', text: `Each player plays from their own pool of ${c.poolSize} civs, listed under Tournament → Rules & format.` });
     return out;
   }
 
@@ -152,6 +152,12 @@
   const hasPools = () => [...new Set(rows('civ_pool').map((r) => r.tournament_id))].map(tOf).filter(Boolean);
 
   // ------------------------------------------------------------------ shared pieces
+  // "15 civs per player · " from the tournament, or from the pools when they are all the same size (older tournaments have no pool_size)
+  function poolSizeText(t, pools) {
+    const sizes = [...new Set(Object.values(pools).map((x) => x.length).filter(Boolean))];
+    const n = Number(t.pool_size) || (sizes.length === 1 ? sizes[0] : 0);
+    return n ? `${n} civs per player · ` : '';
+  }
   function playerPicker(prefix, chosen, onToggle, state, redrawNote) {
     const all = rows('players');
     const np = state.newPlayer;
@@ -162,7 +168,7 @@
           btn('Everyone', () => { onToggle(null, all.map((p) => p.player)); }, 'small'),
           btn('Nobody', () => { onToggle(null, []); }, 'small'),
           btn('+ New player', () => { state.newPlayer = { name: '', steam: '', id: '', msg: '' }; draw(); }, 'small'))),
-      h('div', { class: 'tt-chips' }, all.map((p) => chip([p.player, ' ', h('small', { class: 'tt-label', text: p.steam_name || '' })], chosen.includes(p.player), () => onToggle(p.player), { id: `${prefix}-p-${p.player}` }))),
+      h('div', { class: 'tt-chips adm-multi' }, all.map((p) => chip([h('span', { class: 'adm-pname', text: p.player }), p.steam_name ? ' ' : '', h('small', { class: 'tt-label', text: p.steam_name || '' })], chosen.includes(p.player), () => onToggle(p.player), { id: `${prefix}-p-${p.player}` }))),
       np && h('div', { class: 'adm-inline' },
         field('Name shown on the site', input(`${prefix}-np-name`, np.name, (v) => { np.name = v; }, { maxlength: 40 })),
         field('Steam name', input(`${prefix}-np-steam`, np.steam, (v) => { np.steam = v; }, { maxlength: 60 })),
@@ -206,7 +212,7 @@
       if (c.kind === 'player') return `Player: ${p.player}`;
       if (c.kind === 'rules') return `Rules: ${tn}`;
       if (c.kind === 'civ_pool') return `Civ pools: ${tn}`;
-      if (c.kind === 'result') return p.clear ? `Result taken back: ${tn} game ${p.game}` : `Result: ${tn}${p.game != null && p.game !== '' ? ` game ${p.game}` : ` ${p.series}`}, ${p.winner} won`;
+      if (c.kind === 'result') return p.clear ? `Result taken back: ${tn} game ${p.game}` : `Result: ${tn}${p.game != null && p.game !== '' ? ` game ${p.game}` : ` ${p.stage || p.series}`}, ${p.winner} won`;
       const known = rows('tournaments_file').some((x) => x.tournament_id === p.tournament_id);
       return `${known ? 'Changed' : 'New'} tournament: ${tn}`;
     };
@@ -245,7 +251,7 @@
           field('Start date', input('su-start', d.start, (v) => { d.start = v; }, { type: 'date', onchange: () => draw() })),
           field('End date (optional)', input('su-end', d.end, (v) => { d.end = v; }, { type: 'date', onchange: () => draw() }))),
         ME().role === 'owner' && group('Who runs it',
-          limited.length ? h('div', { class: 'tt-chips' }, limited.map((p) => chip(p.player || p.name || 'Organizer', d.organizers.includes(p.user_id), () => {
+          limited.length ? h('div', { class: 'tt-chips adm-multi' }, limited.map((p) => chip(p.player || p.name || 'Organizer', d.organizers.includes(p.user_id), () => {
             d.organizers = d.organizers.includes(p.user_id) ? d.organizers.filter((x) => x !== p.user_id) : d.organizers.concat(p.user_id); draw();
           }, { id: `su-org-${p.user_id}` }))) : null,
           note(limited.length ? 'Pick organizers who should run this tournament too. You, and organizers of every tournament, always can.' : 'You, and organizers of every tournament, run it. Organizers limited to certain tournaments show up here once you have some (People page).'))),
@@ -373,7 +379,7 @@
         })),
       ],
       h('div', { class: 'tt-row-between adm-savebar' },
-        h('span', { class: 'tt-note adm-flat', role: 'status', text: c.msg || (c.dirty ? 'You have unsaved changes.' : 'Saved pools show on the Civs & maps tab.') }),
+        h('span', { class: 'tt-note adm-flat', role: 'status', text: c.msg || (c.dirty ? 'You have unsaved changes.' : 'Saved pools show under Tournament → Rules & format.') }),
         h('span', { class: 'tt-btns' },
           btn('Discard', () => { c.draft = null; c.msg = ''; draw(); }, '', { disabled: !c.dirty }),
           btn('Save civ pools', async () => {
@@ -528,7 +534,7 @@
             h('td', {}, g.player_a && g.player_b && btn(g.status === 'Final' ? 'Edit' : 'Enter result', () => { dr.result = resultDraft(g); draw(); }, 'small'))),
           dr.result && dr.result.game === g.game ? h('tr', {}, h('td', { colspan: '5' }, resultForm(g))) : null].filter(Boolean))
             : h('tr', {}, h('td', { colspan: '5', class: 'tt-empty', text: 'No games yet. Save the players to make the schedule.' }))))),
-        openSeries.length ? h('div', { class: 'tt-btns' }, ...openSeries.map((b) => btn(`Enter a game: ${b.series} (${b.player_high} vs ${b.player_low})`, () => {
+        openSeries.length ? h('div', { class: 'tt-btns' }, ...openSeries.map((b) => btn(`Enter a game: ${(b.round || 'Playoffs').replace(/s$/, '')} (${b.player_high} vs ${b.player_low})`, () => {
           dr.result = { ...resultDraft({ player_a: b.player_high, player_b: b.player_low }), series: b.series, stage: b.round || 'Playoffs' }; draw();
         }, 'small'))) : null,
         dr.result && dr.result.series ? resultForm({ player_a: dr.result.player_a, player_b: dr.result.player_b, series: dr.result.series }) : null,
@@ -536,7 +542,7 @@
         msg('res')),
 
       sec('Civ pools',
-        note(Object.keys(pools).length ? `${Number(t.pool_size) || '?'} civs per player · pools set for ${roster.filter((p) => (pools[p] || []).length).length} of ${roster.length} players.` : 'No civ pools: any civ is allowed.', { class: 'tt-note adm-flat' }),
+        note(Object.keys(pools).length ? `${poolSizeText(t, pools)}pools set for ${roster.filter((p) => (pools[p] || []).length).length} of ${roster.length} players.` : 'No civ pools: any civ is allowed.', { class: 'tt-note adm-flat' }),
         h('div', { class: 'tt-btns' }, btn(Object.keys(pools).length ? 'Edit civ pools' : 'Set up civ pools', () => { S.civs.tid = tid; S.civs.draft = null; S.page = 'civs'; draw(); }))),
 
       sec('Rules',

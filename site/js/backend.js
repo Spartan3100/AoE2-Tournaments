@@ -220,13 +220,15 @@
   }
 
   // ---------------------------------------------------------------- header: who's signed in
+  // who this browser says you are under "I'm" (render.js keeps it in localStorage), so the hint below doesn't contradict it
+  const chosenHere = () => { try { return localStorage.getItem('tt-me') || (el('me-pick') && el('me-pick').value) || ''; } catch (e) { return ''; } };
   function renderAuth() {
     const box = el('auth-box');
     if (!box) return;
     box.hidden = false;
     box.replaceChildren(mk('span', 'tt-label', `Signed in${st.claim ? ` as ${st.claim}` : ''}${st.role && st.role !== 'player' ? ` · ${st.role}` : ''}`),
       button('Sign out', async () => { await st.client.auth.signOut(); location.reload(); }));
-    if (!st.claim && st.role !== 'viewer') box.append(mk('span', 'tt-label', '· choose yourself under “I’m”'));
+    if (!st.claim && st.role !== 'viewer' && !chosenHere()) box.append(mk('span', 'tt-label', '· choose yourself under “I’m”'));
     if (st.msg) box.append(mk('span', 'tt-label', st.msg));
   }
 
