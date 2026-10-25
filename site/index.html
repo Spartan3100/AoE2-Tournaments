@@ -47,6 +47,9 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
           <div class="tt-seg" id="theme-pick" role="group" aria-label="Look">
             <button type="button" data-theme="classic">Classic AoE</button><button type="button" data-theme="clean">Clean &amp; light</button><button type="button" data-theme="dark">Dark &amp; gold</button>
           </div></div>
+        <div class="tt-field"><span class="tt-label">New games</span>
+          <button type="button" class="tt-btn tt-sync-btn" id="sync-now-2">Sync now</button>
+          <span class="tt-label tt-sync-msg" role="status"></span></div>
         <button type="button" class="tt-btn" id="account-admin" hidden>Admin</button>
         <span id="auth-box" hidden></span>
       </div>

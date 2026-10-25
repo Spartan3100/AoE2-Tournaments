@@ -272,6 +272,8 @@
   window.TT_UPLOAD = { can: canAddReplays, send: addReplay, list: addedReplays, cancel: takeBackReplay, claimed: claimedGames };
   // the Admin tab (site/js/admin.js); the database rules (supabase/schema.sql) check every one of these again
   const rpc = async (name, args) => { const { data, error } = await st.client.rpc(name, args); if (error) throw error; return data; };
+  // "Sync now": request_sync() in supabase/schema.sql asks GitHub to run the update job (render.js shows its progress)
+  window.TT_SYNC = { can: () => !!st.session && st.member && st.role !== 'viewer', request: () => rpc('request_sync'), status: () => rpc('sync_status') };
   window.TT_ORG = {
     save: saveChange, cancel: cancelChange, isOrganizer, canRun, canRunAll,
     people: () => rpc('members_list'),
