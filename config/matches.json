@@ -144,14 +144,15 @@
   "series_game": null,
   "player_a": "Joe",
   "player_b": "Daniel",
-  "status": "Scheduled",
-  "winner": "",
-  "civ_a": "",
-  "civ_b": "",
-  "map": "",
+  "status": "Final",
+  "winner": "Daniel",
+  "civ_a": "Vietnamese",
+  "civ_b": "Ethiopians",
+  "map": "Arabia",
   "duration_min": null,
-  "played_at": "",
-  "match_id": ""
+  "played_at": "2026-10-24",
+  "match_id": "",
+  "confirmed_by": "organizer (entered by hand)"
  },
  {
   "tournament_id": "t1",
