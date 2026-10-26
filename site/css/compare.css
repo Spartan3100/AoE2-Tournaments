@@ -143,3 +143,4 @@
 .tt .cmp-games .tt-links { flex-wrap: nowrap; }
 /* the head-to-head games table (with links) needs the full width; side by side follows below it */
 .tt #cmp-h2h, .tt #cmp-side { grid-column: 1 / -1; }
+.tt #cmp-team .cmp-grid2 { margin-top: var(--cds-gap-sm); }

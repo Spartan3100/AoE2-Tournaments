@@ -1,4 +1,4 @@
-// "Link my replay folder" (Match review): the player picks AoE2's savegame folder once; the site then looks in it for
+// "Link my replay folder" (Games page): the player picks AoE2's savegame folder once; the site then looks in it for
 // replays of their games that have none (no copy on Microsoft's server, or the game is missing from Microsoft's
 // history) and adds them like "Add replay" does (backend.js TT_UPLOAD). Chrome and Edge only (File System Access API).
 // The folder stays on the PC: only the matching files are uploaded, and the update job checks each one is that game

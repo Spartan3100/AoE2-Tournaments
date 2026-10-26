@@ -19,8 +19,8 @@
 html[data-theme="clean"] {
   --font-anthropic-serif: var(--font-anthropic-sans);
   --color-bg: #f5f6f8; --color-panel: #ffffff; --color-fg: #17191d; --color-fg-muted: #646b76; --color-border-line: #e2e5ea;
-  --color-ok: #15803d; --color-warn: #a16207; --color-bad: #c2410c;
-  --color-accent: #2563eb; --color-accent-fg: #ffffff; --color-accent-soft: #e5edfd; --color-soft: #eef1f5;
+  --color-ok: #127436; --color-warn: #9a5d06; --color-bad: #b03a0a;
+  --color-accent: #2259e0; --color-accent-fg: #ffffff; --color-accent-soft: #e5edfd; --color-soft: #eef1f5;
   --cds-surface-popover: #ffffff; --cds-border: #d8dce3; --cds-shadow-popover: 0 4px 16px rgba(16,24,40,.12); --cds-text-secondary: #646b76;
   --cds-chart-axis: #b8bec8; --cds-chart-grid: #eceff3;
   color-scheme: light;
@@ -38,13 +38,13 @@ html, body { margin: 0; background: var(--color-bg); color: var(--color-fg); fon
 #dash-root { max-width: 1240px; margin: 0 auto; padding: 20px 16px 48px; box-sizing: border-box; }
 #dash-root *, #dash-root *::before, #dash-root *::after { box-sizing: border-box; }
 #dash-root button, #dash-root select, #dash-root input { font: inherit; }
-#dash-root a { color: inherit; }
+#dash-root a:not(.tt-btn.primary) { color: inherit; } /* a link styled as a primary button keeps the button text colour */
 #dash-root svg text { fill: currentColor; }
 .dash-skeleton { color: transparent !important; background: linear-gradient(90deg, var(--color-border-line), var(--color-bg), var(--color-border-line)); background-size: 200% 100%; animation: tt-sk 1.2s linear infinite; border-radius: 4px; min-height: 1em; }
 @keyframes tt-sk { from { background-position: 200% 0; } to { background-position: 0 0; } }
 .tt #auth-box { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--cds-gap-xs); margin-left: auto; }
 .tt #auth-box input { color: var(--color-fg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 2px var(--cds-pad-sm); min-width: 12rem; }
-a.tt-btn { text-decoration: none; display: inline-block; }
+a.tt-btn { text-decoration: none; display: inline-flex; align-items: center; }
 
 /* Sign-in screen (shown until an invited person signs in) */
 html.tt-locked #dash-root { display: none; }
@@ -74,7 +74,7 @@ html.tt-locked #dash-root { display: none; }
 .tt .tt-page[hidden] { display: none; }
 .tt .tt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: var(--cds-gap-md); }
 .tt .tt-grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--cds-gap-md); }
-.tt .tt-card h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+.tt .tt-card h2 { font-family: var(--font-anthropic-serif); font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
 .tt h3.tt-sec { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: var(--cds-gap-md) 0 0; }
 .tt .tt-note { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); margin: var(--cds-gap-xs) 0 var(--cds-gap-md); }
 .tt .tt-scroll { overflow-x: auto; }
@@ -179,11 +179,11 @@ html.tt-locked #dash-root { display: none; }
 .tt .tt-field input:disabled, .tt .tt-field select:disabled { opacity: .5; }
 .tt .tt-btn:disabled { opacity: .45; cursor: default; }
 .tt .tt-btn.small { padding: 0 var(--cds-pad-sm); font-size: var(--cds-font-size-caption); }
-#admin .tt-btn.primary { background: var(--color-fg); color: var(--color-bg); border-color: var(--color-fg); }
 .tt .tt-row-between { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--cds-gap-sm); }
 .tt .tt-sub { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); }
-.tt .tt-sub button { font: inherit; background: none; border: 1px solid var(--color-border-line); border-radius: 999px; padding: 3px 12px; cursor: pointer; color: var(--color-fg-muted); }
-.tt .tt-sub button[aria-current="page"] { color: var(--color-fg); border-color: var(--color-fg); background: var(--color-panel); }
+.tt .tt-sub button { font: inherit; background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 999px; padding: 5px 14px; cursor: pointer; color: var(--color-fg-muted); }
+/* Admin's pages look like the other sections' page pills */
+.tt .tt-sub button[aria-current="page"] { color: var(--color-accent-fg); border-color: var(--color-accent); background: var(--color-accent); }
 .tt .adm-stack { display: flex; flex-direction: column; gap: var(--cds-gap-md); min-width: 0; }
 .tt .adm-flat { margin: 0; }
 .tt .adm-title { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: 20px; margin: 0; }
@@ -210,14 +210,14 @@ html.tt-locked #dash-root { display: none; }
 .tt .adm-civgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); gap: 6px; }
 .tt .adm-civ { font: inherit; color: var(--color-fg); display: flex; flex-direction: column; align-items: flex-start; text-align: left; border: 1px solid var(--color-border-line); border-radius: 6px; padding: 4px var(--cds-pad-sm); background: var(--color-panel); cursor: pointer; }
 .tt .adm-civ small { color: var(--color-fg-muted); font-size: 11px; }
-.tt .adm-civ[aria-pressed="true"] { border-color: var(--color-fg); background: var(--color-bg); box-shadow: inset 3px 0 0 var(--color-fg); }
-.tt .adm-civ:disabled { opacity: .4; cursor: default; }
+.tt .adm-civ[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); box-shadow: inset 3px 0 0 var(--color-accent); }
+.tt .adm-civ:disabled { opacity: .55; cursor: default; }
 .tt .adm-civ:focus-visible, .tt .tt-chip:focus-visible, .tt .tt-btn:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
 .tt .adm-savebar { border-top: 1px solid var(--color-border-line); padding-top: var(--cds-gap-md); }
 .tt .adm-narrow { grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); min-width: min(100%, 24rem); }
 .tt .adm-tlist { display: flex; flex-direction: column; gap: 6px; }
 .tt .adm-tlist button { font: inherit; color: var(--color-fg); text-align: left; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-panel); padding: var(--cds-pad-sm) var(--cds-pad-md); cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
-.tt .adm-tlist button[aria-current="true"] { border-color: var(--color-fg); }
+.tt .adm-tlist button[aria-current="true"] { border-color: var(--color-accent); box-shadow: inset 3px 0 0 var(--color-accent); }
 .tt .adm-tlist small { color: var(--color-fg-muted); }
 .tt .adm-bar { display: block; height: 6px; background: var(--color-bg); border-radius: 3px; overflow: hidden; }
 .tt .adm-bar i { display: block; height: 100%; background: var(--color-ok); }
@@ -256,7 +256,7 @@ html.tt-locked #dash-root { display: none; }
 .tt .tt-live-game { padding: var(--cds-pad-xs) 0; }
 .tt .tt-live-game.tour { border-left: 3px solid var(--color-bad); padding-left: var(--cds-pad-sm); }
 .tt .tt-live-game .row { align-items: center; }
-.tt .tt-tabs button.tt-live-dot::after { content: ''; display: inline-block; width: 0.45em; height: 0.45em; margin-left: 0.35em; border-radius: 50%; background: var(--color-bad); vertical-align: 0.2em; }
+.tt .tt-sections button.tt-live-dot::after, .tt-bottom button.tt-live-dot::after { content: ''; display: inline-block; width: 0.45em; height: 0.45em; margin-left: 0.35em; border-radius: 50%; background: var(--color-bad); vertical-align: 0.2em; }
 @keyframes tt-pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .tt .tt-live-mark { animation: none; } }
 
@@ -319,8 +319,18 @@ html.tt-locked .tt-bottom, html.tt-locked .tt-sheet { display: none !important; 
 }
 .tt .tt-chip { border: 1px solid var(--color-border-line); background: var(--color-panel); color: var(--color-fg-muted); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
 .tt .tt-chip[aria-pressed="true"] { color: var(--color-accent-fg); background: var(--color-accent); border-color: var(--color-accent); }
+/* text inside a chip (a player's in-game name, a count) takes the chip's colour, so it stays readable when the chip is on */
+.tt .tt-chip .tt-label, .tt .tt-chip .adm-count { color: inherit; font-size: inherit; font-weight: 400; }
+.tt .tt-chip .tt-label { opacity: 1; }
+.tt .tt-chip[aria-pressed="true"] .adm-count { font-weight: var(--cds-font-weight-medium); }
+.tt .adm-count.full::after { content: " \2713"; }
+/* pick-several lists (players, organizers): a tick on the ones that are in */
+.tt .adm-multi .tt-chip[aria-pressed="true"]::before { content: "\2713  "; font-weight: 700; }
 .tt .tt-pick-players { display: flex; flex-wrap: wrap; gap: 6px; }
 #dash-root [hidden] { display: none !important; }
 .tt .tt-account-menu .tt-seg { display: grid; grid-template-columns: repeat(3, 1fr); border-radius: 10px; }
 .tt .tt-account-menu .tt-seg button { padding: 7px 4px; font-size: 13px; }
 .tt .tt-account-menu .tt-field { display: grid; gap: 4px; }
+.tt .tt-chip .adm-pname { font-weight: var(--cds-font-weight-medium); }
+.tt-bottom button { position: relative; }
+.tt-bottom button.tt-live-dot::after { position: absolute; top: 6px; left: calc(50% + 8px); margin: 0; }
