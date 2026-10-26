@@ -59,14 +59,15 @@
   "series_game": null,
   "player_a": "Daniel",
   "player_b": "Nathan",
-  "status": "Scheduled",
-  "winner": "",
-  "civ_a": "",
-  "civ_b": "",
-  "map": "",
-  "duration_min": null,
-  "played_at": "",
-  "match_id": ""
+  "status": "Final",
+  "winner": "Daniel",
+  "civ_a": "Khmer",
+  "civ_b": "Spanish",
+  "map": "Arabia",
+  "duration_min": 18.4,
+  "played_at": "10/26/2026 02:13:21",
+  "match_id": "516421811",
+  "confirmed_by": "organizer"
  },
  {
   "tournament_id": "t1",
