@@ -26,7 +26,8 @@
   const QTY = 'var(--color-fg-muted)';
   const PERIOD_DAYS = { 'Last year': 365, 'Last 6 months': 183 };
   // sort, switch and expand state for this visit
-  const ui = { civSort: { k: 'n', dir: -1 }, vsSort: { k: 'n', dir: -1 }, maps: 'overall', vsAll: false };
+  const ui = { civSort: { k: 'n', dir: -1 }, vsSort: { k: 'n', dir: -1 }, maps: 'overall', vsAll: false, qp: true };
+  try { ui.qp = localStorage.getItem('tt-qp') !== '0'; } catch (e) { /* storage blocked */ }
   let last = null; // the last ctx, to redraw one section after a click
 
   // ---------------------------------------------------------------- the games in view (memoised per data version)
@@ -105,24 +106,27 @@
   function ratingSeries(X) {
     const team = X.view === 'Ranked team';
     const type = team ? 'Team ranked' : '1v1 ranked';
-    const ladder = team ? 'team ladder' : '1v1 ladder';
+    const ladder = team ? 'team ladder' : '1v1 ladder', qpName = team ? 'Quick Play team' : 'Quick Play 1v1';
+    // Quick Play has its own rating: drawn as a second line, never mixed into the ladder's
     const okRow = (r) => r.type === type && r.rating != null && r.rating !== '';
-    let rows = X.g.filter(okRow), note = '';
-    if (rows.length < 2) {
+    const QP = window.TT_QUICK_PLAY;
+    let rows = X.g.filter((r) => okRow(r) && !QP(r)), qpRows = X.g.filter((r) => okRow(r) && QP(r)), note = '';
+    if (rows.length < 2 && qpRows.length < 2) {
       // a view with no rated games of its own (Unranked, a quiet Tournament view): the ladder over the same period
       const all = X.hist.filter((r) => r.player === X.player && okRow(r) && X.inPeriod(r))
         .map((r) => ({ ...r, t: Date.parse(r.started), w: Number(r.won) === 1, tour: false })).sort((a, b) => a.t - b.t);
       if (all.length >= 2 && X.view !== 'All games' && X.view !== 'Ranked 1v1' && X.view !== 'Ranked team') {
         note = `${viewName(X.view)} games in this period don’t have enough ${ladder} ratings, so this shows the ${ladder} over the same period.`;
-        rows = all;
+        rows = all.filter((r) => !QP(r));
+        qpRows = all.filter(QP);
       }
     }
-    const pts = rows.map((r, i) => {
+    const toPts = (list) => list.map((r) => {
       const v = ratingAfter(r);
       return { t: r.t, y: v, won: r.w, r, tip: [fmtDate(r.t), `Rating ${num(v)}${r.rating_diff != null && r.rating_diff !== '' ? ` (${signed(Number(r.rating_diff))})` : ''}`,
-        `${r.w ? 'Won' : 'Lost'} as ${r.civ}${r.opp_civ ? ` vs ${r.opp_civ}` : ''} on ${r.map}`].concat(r.tour ? ['Tournament game'] : []).join('\n') };
+        `${r.w ? 'Won' : 'Lost'} as ${r.civ}${r.opp_civ ? ` vs ${r.opp_civ}` : ''} on ${r.map}`].concat(QP(r) ? [qpName] : [], r.tour ? ['Tournament game'] : []).join('\n') };
     });
-    return { pts, ladder, note };
+    return { pts: toPts(rows), qp: toPts(qpRows), ladder, qpName, note };
   }
 
   function board(X) {
@@ -207,10 +211,17 @@
     host.replaceChildren();
     const R = X.rating;
     el('pf-rating-title').textContent = `Rating over time (${R.ladder})`;
-    el('pf-rating-note').textContent = R.note || `Rating on the ${R.ladder} after each ranked game in this view; dots are wins and losses. Hover or tap for the exact number.`;
-    if (R.pts.length < 2) { host.append(empty(X.view === 'Unranked & other' ? 'Unranked games have no rating, and there are no ranked games in this period.' : `Not enough ${R.ladder} games in this view and period to draw a trend.`)); return; }
-    C.line(host, R.pts, { area: true, dots: true, yTitle: 'Rating', label: `Rating on the ${R.ladder} over time` });
-    host.append(C.legend([['var(--color-ok)', 'Win'], ['var(--color-bad)', 'Loss'], ['var(--color-accent)', 'Rating after the game']]));
+    const qpBtn = el('pf-qp');
+    qpBtn.hidden = !R.qp.length;
+    qpBtn.textContent = `Show ${R.qpName}`;
+    qpBtn.setAttribute('aria-pressed', String(ui.qp));
+    const qp = ui.qp ? R.qp : [];
+    el('pf-rating-note').textContent = (R.note || `Rating on the ${R.ladder} after each ranked game in this view; dots are wins and losses. Hover or tap for the exact number.`) +
+      (R.qp.length ? ` ${R.qpName} has its own rating, separate from the ladder${ui.qp ? ': the dashed line' : ''}.` : '');
+    if (R.pts.length < 2 && qp.length < 2) { host.append(empty(X.view === 'Unranked & other' ? 'Unranked games have no rating, and there are no ranked games in this period.' : `Not enough ${R.ladder} games in this view and period to draw a trend.`)); return; }
+    const QPC = 'var(--color-fg-muted)';
+    C.line(host, R.pts, { area: true, dots: true, yTitle: 'Rating', label: `Rating on the ${R.ladder}${qp.length ? ` and ${R.qpName}` : ''} over time`, more: qp.length ? [{ pts: qp, color: QPC, dash: '5 4' }] : [] });
+    host.append(C.legend([['var(--color-ok)', 'Win'], ['var(--color-bad)', 'Loss'], ['var(--color-accent)', `Rating after the game (${R.ladder})`]].concat(qp.length ? [[QPC, R.qpName]] : [])));
   }
 
   // ---------------------------------------------------------------- 3. civs
@@ -615,6 +626,11 @@
 
   // the Overall / By month switch on Maps
   el('pf-maps-mode').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { ui.maps = b.dataset.mode; if (last) maps(last); }));
+  el('pf-qp').addEventListener('click', () => {
+    ui.qp = !ui.qp;
+    try { localStorage.setItem('tt-qp', ui.qp ? '1' : '0'); } catch (e) { /* storage blocked */ }
+    if (last) rating(last);
+  });
 
   window.TT_PROFILE = { draw };
 })();

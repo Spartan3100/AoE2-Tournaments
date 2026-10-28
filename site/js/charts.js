@@ -5,7 +5,8 @@
 // Tooltips: any SVG/HTML element inside a chart (.tt-c) or an area marked .tt-c-tips, with a data-tip attribute, shows it on hover and on tap.
 // The text is plain; lines are split on "\n" and the first line is bold.
 //
-//   C.line(host, pts, opts)       pts [{t: ms, y, won?: bool, tip}]; opts {area, dots, yFmt, height, ref, refLabel, yTitle, label}
+//   C.line(host, pts, opts)       pts [{t: ms, y, won?: bool, tip}]; opts {area, dots, yFmt, height, ref, refLabel, yTitle, label,
+//                                 more: [{pts, color, dash}] further lines on the same axes (no area; dots if opts.dots)}
 //   C.hbars(host, rows, opts)     rows [{label, tip?, panels: [{segs: [{v, color, tip?}], txt}]}]; opts {panels: [{title, max, ticks, fmtT, ref}], rowH, label}
 //   C.vbars(host, items, opts)    items [{label, sub, v, color, opacity, tip, txt}]; opts {max, ticks, fmtY, ref, height, yTitle, label}
 //   C.heat(host, rows, cols, cell, opts)   cell(r, c) -> {fill, tip, empty?}; opts {labelW, cellH, every, label, xTitle}
@@ -115,13 +116,16 @@
   function line(host, pts, o = {}) {
     const b = box(host);
     const w = width(b), h = o.height || (w < 480 ? 230 : 290);
-    let lo = Math.min(...pts.map((p) => p.y)), hi = Math.max(...pts.map((p) => p.y));
+    const more = (o.more || []).filter((s) => s.pts.length);
+    const every = more.reduce((a, s) => a.concat(s.pts), pts.slice());
+    let lo = Math.min(...every.map((p) => p.y)), hi = Math.max(...every.map((p) => p.y));
     if (o.yMin != null) lo = o.yMin; else { const pad = (hi - lo) * 0.08 || 10; lo -= pad; }
     if (o.yMax != null) hi = o.yMax; else { const pad = (hi - lo) * 0.06 || 10; hi += pad; }
     const ticks = niceTicks(lo, hi, 4), yFmt = o.yFmt || fmtNum;
     const lw = Math.max(...ticks.map((v) => yFmt(v).length)) * 6.6 + 10;
     const m = { l: lw, r: 12, t: o.yTitle ? 22 : 10, b: 26 };
-    const t0 = pts[0].t, t1 = pts[pts.length - 1].t === t0 ? t0 + 864e5 : pts[pts.length - 1].t;
+    const tMin = Math.min(...every.map((p) => p.t)), tMax = Math.max(...every.map((p) => p.t));
+    const t0 = tMin, t1 = tMax === t0 ? t0 + 864e5 : tMax;
     const X = lin(t0, t1, m.l, w - m.r), Y = lin(lo, hi, h - m.b, m.t);
     const svg = svgOf(w, h, o.label); b.appendChild(svg);
     if (o.yTitle) svg.appendChild(S('text', { x: 0, y: 11, class: 'ttl', text: o.yTitle }));
@@ -141,11 +145,15 @@
     }
     const col = o.color || 'var(--color-accent)';
     const d = pts.map((p, i) => (i ? 'L' : 'M') + X(p.t).toFixed(1) + ' ' + Y(p.y).toFixed(1)).join('');
-    if (o.area) svg.appendChild(S('path', { d: `${d}L${X(pts[pts.length - 1].t).toFixed(1)} ${Y(lo)}L${X(t0).toFixed(1)} ${Y(lo)}Z`, fill: col, 'fill-opacity': 0.14 }));
-    svg.appendChild(S('path', { d, fill: 'none', stroke: col, 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+    if (o.area && pts.length) svg.appendChild(S('path', { d: `${d}L${X(pts[pts.length - 1].t).toFixed(1)} ${Y(lo)}L${X(pts[0].t).toFixed(1)} ${Y(lo)}Z`, fill: col, 'fill-opacity': 0.14 }));
+    const lines = [{ pts, color: col }].concat(more);
+    lines.forEach((s, i) => {
+      const sd = i ? s.pts.map((p, j) => (j ? 'L' : 'M') + X(p.t).toFixed(1) + ' ' + Y(p.y).toFixed(1)).join('') : d;
+      if (sd) svg.appendChild(S('path', { d: sd, fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-dasharray': s.dash || null }));
+    });
     if (o.dots) {
-      const r = pts.length > 250 ? 1.9 : pts.length > 100 ? 2.4 : 3;
-      pts.forEach((p) => { if (p.won != null) svg.appendChild(S('circle', { cx: X(p.t).toFixed(1), cy: Y(p.y).toFixed(1), r, fill: p.won ? 'var(--color-ok)' : 'var(--color-bad)' })); });
+      const r = every.length > 250 ? 1.9 : every.length > 100 ? 2.4 : 3;
+      lines.forEach((s) => s.pts.forEach((p) => { if (p.won != null) svg.appendChild(S('circle', { cx: X(p.t).toFixed(1), cy: Y(p.y).toFixed(1), r, fill: p.won ? 'var(--color-ok)' : 'var(--color-bad)' })); }));
     }
     const cross = S('line', { y1: m.t, y2: h - m.b, stroke: 'var(--color-fg-muted)', 'stroke-dasharray': '3 3', visibility: 'hidden' });
     const dot = S('circle', { r: 5, fill: col, stroke: 'var(--color-panel)', 'stroke-width': 2, visibility: 'hidden' });
@@ -154,10 +162,20 @@
     function mv(e) {
       e.ttTip = true;
       const r = svg.getBoundingClientRect(), sx = (e.clientX - r.left) * (w / r.width);
+      const sy = (e.clientY - r.top) * (h / r.height);
       const tx = t0 + ((sx - m.l) / (w - m.l - m.r)) * (t1 - t0);
-      let a = 0, z = pts.length - 1;
-      while (z - a > 1) { const c = (a + z) >> 1; if (pts[c].t < tx) a = c; else z = c; }
-      const p = Math.abs(pts[a].t - tx) <= Math.abs(pts[z].t - tx) ? pts[a] : pts[z];
+      // the point nearest in time on each line, then of those the one nearest the pointer
+      let p = null, best = Infinity;
+      lines.forEach((s) => {
+        const ps = s.pts;
+        if (!ps.length) return;
+        let a = 0, z = ps.length - 1;
+        while (z - a > 1) { const c = (a + z) >> 1; if (ps[c].t < tx) a = c; else z = c; }
+        const q = Math.abs(ps[a].t - tx) <= Math.abs(ps[z].t - tx) ? ps[a] : ps[z];
+        const dist = Math.hypot(X(q.t) - sx, Y(q.y) - sy);
+        if (dist < best) { best = dist; p = q; }
+      });
+      if (!p) return;
       cross.setAttribute('x1', X(p.t)); cross.setAttribute('x2', X(p.t)); cross.setAttribute('visibility', 'visible');
       dot.setAttribute('cx', X(p.t)); dot.setAttribute('cy', Y(p.y)); dot.setAttribute('visibility', 'visible');
       if (p.won != null) dot.style.fill = p.won ? 'var(--color-ok)' : 'var(--color-bad)';

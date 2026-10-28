@@ -56,7 +56,7 @@
     }).filter(Boolean);
   }
   const ratingNow = (p) => {
-    const rated = (IDX.byPlayer.get(p) || []).filter((r) => r.type === '1v1 ranked' && r.rating != null && r.rating !== '');
+    const rated = (IDX.byPlayer.get(p) || []).filter((r) => r.type === '1v1 ranked' && r.rating != null && r.rating !== '' && !window.TT_QUICK_PLAY(r));
     return rated.length ? Number(rated[rated.length - 1].rating) : null;
   };
 
@@ -479,9 +479,9 @@
     key('cmp-k-a', name(a)); key('cmp-k-b', name(b)); key('cmp-k-w', `They met: ${name(a)} won`); key('cmp-k-l', `They met: ${name(b)} won`);
     box.appendChild(leg);
     box.appendChild(mk('p', 'tt-note', `${period}. Ranked 1v1 ladder. Hover or tap the chart for exact ratings.`));
-    const ser = (p) => (IDX.byPlayer.get(p) || []).filter((r) => r.type === '1v1 ranked' && r.rating != null && r.rating !== '' && inPeriod(period, r.started))
+    const ser = (p) => (IDX.byPlayer.get(p) || []).filter((r) => r.type === '1v1 ranked' && r.rating != null && r.rating !== '' && !window.TT_QUICK_PLAY(r) && inPeriod(period, r.started))
       .map((r) => ({ t: new Date(r.started), v: Number(r.rating) }));
-    const meets = pg.filter((g) => g.kind === '1v1').map((g) => ({ t: new Date(g.r.started), v: g.r.type === '1v1 ranked' && g.r.rating != null && g.r.rating !== '' ? Number(g.r.rating) : null, w: won(g.r), r: g.r, o: g.o }));
+    const meets = pg.filter((g) => g.kind === '1v1').map((g) => ({ t: new Date(g.r.started), v: g.r.type === '1v1 ranked' && g.r.rating != null && g.r.rating !== '' && !window.TT_QUICK_PLAY(g.r) ? Number(g.r.rating) : null, w: won(g.r), r: g.r, o: g.o }));
     const cb = chartBox(); cb.classList.add('cmp-line-chart');
     box.appendChild(cb);
     later(() => ratingChart(cb, a, b, ser(a), ser(b), meets));

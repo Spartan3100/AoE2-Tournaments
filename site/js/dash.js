@@ -174,6 +174,7 @@
         opp_civs: opps.map(civ).join(', '), team_civs: mates.map(civ).join(', '), teammates: mates.map((q) => String(pick(q, 'name') || '')).join(', '),
         players_n: n, won: p.won === true || p.won === 1 ? 1 : 0, rating: pick(p, 'rating'), rating_diff: pick(p, 'ratingDiff', 'rating_diff'),
         duration_min: Math.round(((new Date(finished) - new Date(started)) / 60000) * 10) / 10, replay: pick(p, 'replay') ? 1 : 0, profile_id: pid, live: 1,
+        ladder: String(pick(m, 'leaderboardId', 'leaderboard') || ''),
       });
     });
     return out;

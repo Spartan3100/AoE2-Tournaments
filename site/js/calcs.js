@@ -179,6 +179,9 @@ dash.calc('map_stats', {
 window.TT_SCOPES = ['All games', 'Tournament', 'Ranked 1v1', 'Ranked team', 'Unranked & other'];
 // Periods: a game also counts in "<view> · Last year" / "<view> · Last 6 months" when it is that recent. "All time" has no suffix.
 window.TT_PERIODS = ['All time', 'Last year', 'Last 6 months'];
+// Quick Play 1v1 and team (AoE2 Companion ladders qp_rm_1v1, qp_rm_team) count as ranked games but have their own
+// rating, separate from the ranked ladder: ladder ratings (now, peak, over time) leave them out.
+window.TT_QUICK_PLAY = (r) => String(r.ladder || '').toLowerCase().startsWith('qp_');
 
 dash.calc('h_scoped', {
   inputs: ['history', 'matches'],
@@ -215,7 +218,7 @@ dash.calc('p_summary', {
         const wins = g.filter((r) => Number(r.won) === 1).length;
         const suffix = scope.includes(' · ') ? ' · ' + scope.split(' · ')[1] : '';
         const ratedType = scope.split(' · ')[0] === 'Ranked team' ? 'Team ranked' : '1v1 ranked';
-        const rated = mine.filter((r) => r.type === ratedType && r.rating != null && tagsOf(r).includes('All games' + suffix));
+        const rated = mine.filter((r) => r.type === ratedType && r.rating != null && !window.TT_QUICK_PLAY(r) && tagsOf(r).includes('All games' + suffix));
         let best = 0, run = 0;
         g.forEach((r) => { run = Number(r.won) === 1 ? run + 1 : 0; best = Math.max(best, run); });
         let now = 0; const last = g.length ? Number(g[g.length - 1].won) : 0;
@@ -768,7 +771,7 @@ dash.calc('p_seasons', {
         const wins = g.filter((r) => Number(r.won) === 1).length;
         const civs = new Map(); g.forEach((r) => civs.set(r.civ, (civs.get(r.civ) || 0) + 1));
         const top = [...civs.entries()].sort((a, b) => b[1] - a[1])[0];
-        const rated = g.filter((r) => r.type === '1v1 ranked' && r.rating != null);
+        const rated = g.filter((r) => r.type === '1v1 ranked' && r.rating != null && !window.TT_QUICK_PLAY(r));
         out.push({
           player, season: s.season, kind: s.kind, start: s.start, end: s.end, games: g.length, wins, win_rate: wins / g.length,
           avg_minutes: Math.round((g.reduce((a, r) => a + Number(r.duration_min), 0) / g.length) * 10) / 10,
