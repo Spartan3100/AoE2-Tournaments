@@ -1,0 +1,20 @@
+/* The Games and Players pages (sections with .tt-modern): condensed headings, IBM Plex text, monospaced numbers and
+   roomier cards, as the Game breakdown mockup drew them. Tokens only, so Classic AoE, Clean & light and Dark & gold
+   all keep working; loaded after profile.css and compare.css so it wins there. */
+.tt .tt-modern { font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.tt .tt-modern .tt-card { border-radius: 14px; padding: 20px 22px; }
+.tt .tt-modern .tt-card h2, .tt .tt-modern.pf h2, .tt .tt-modern.pf .pf-head h2, .tt .tt-modern .cmp-pair .tt-card h2, .tt .tt-modern #cmp-all h2 {
+  font-family: var(--font-display); font-weight: 600; font-size: 23px; letter-spacing: .01em; line-height: 1.15; text-wrap: balance; }
+.tt .tt-modern.pf .pf-h1 { font-family: var(--font-display); font-weight: 700; font-size: 34px; letter-spacing: .005em; }
+.tt .tt-modern.pf .pf-part { font-family: var(--font-display); font-weight: 700; font-size: 28px; }
+.tt .tt-modern.pf .pf-big-v, .tt .tt-modern .tt-kpi-v, .tt .tt-modern .tt-id .v, .tt .tt-modern.pf .pf-avatar { font-family: var(--font-display); font-weight: 600; }
+.tt .tt-modern .tt-note { font-size: 13px; }
+.tt .tt-modern th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.tt .tt-modern td { padding-top: 7px; padding-bottom: 7px; }
+.tt .tt-modern td.num, .tt .tt-modern.pf .pf-stat .v, .tt .tt-modern span.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.tt .tt-modern .cmp-hero-v, .tt .tt-modern .cmp-hero-dash, .tt .tt-modern .cmp-rec-v { font-family: var(--font-display); font-weight: 600; }
+.tt .tt-modern .tt-btn { border-radius: 10px; }
+.tt .tt-modern .tt-chip, .tt .tt-modern.pf .pf-pill, .tt .tt-modern .cmp-rate { border-radius: 999px; }
+.tt .tt-modern.pf .pf-subh, .tt .tt-modern .cmp-h3 { letter-spacing: .07em; }
+.tt .tt-modern.pf .pf-list li, .tt .tt-modern.pf .pf-coach-i { border-radius: 11px; }
+#profiles.tt-modern svg text, #rivals.tt-modern svg text, #review.tt-modern svg text { font-family: var(--font-data); }

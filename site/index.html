@@ -12,9 +12,14 @@
 <meta name="apple-mobile-web-app-title" content="AoE2 Tourney">
 <title>AoE2 Tournaments</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237a1e1e'/%3E%3Cpath d='M12 9v14l11-7z' fill='%23f0d696'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/profile.css">
 <link rel="stylesheet" href="css/compare.css">
+<link rel="stylesheet" href="css/modern.css">
+<link rel="stylesheet" href="css/breakdown.css">
 <meta name="robots" content="noindex, nofollow">
 <script>
 document.documentElement.classList.add('tt-locked');
@@ -192,7 +197,7 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
   </section>
 
   <!-- ===================== Profiles ===================== -->
-  <section class="tt-page pf" id="profiles" hidden>
+  <section class="tt-page pf tt-modern" id="profiles" hidden>
     <div class="tt-card pf-filters" role="group" aria-label="What to show">
       <div class="pf-frow"><label class="pf-k" for="pp-player">Player</label><select id="pp-player" data-source="players"></select></div>
       <div class="pf-frow"><span class="pf-k">View</span><div class="tt-chips" id="pp-scope" role="group" aria-label="Games"></div></div>
@@ -345,7 +350,7 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
   </section>
 
   <!-- ===================== Players > Compare ===================== -->
-  <section class="tt-page cmp" id="rivals" hidden>
+  <section class="tt-page cmp tt-modern" id="rivals" hidden>
     <div class="tt-card cmp-bar">
       <div class="cmp-ctl">
         <label class="tt-label" for="hh-a">Player</label>
@@ -385,7 +390,7 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
   </section>
 
   <!-- ===================== Games ===================== -->
-  <section class="tt-page" id="review" hidden>
+  <section class="tt-page tt-modern" id="review" hidden>
     <div class="tt-card tt-folder" id="rv-folder-card" hidden>
       <h2>Your replay folder</h2>
       <p class="tt-note">Link AoE2’s replay folder once, and whenever you open Games the site looks in it for your games that have no replay here (Microsoft’s server has no copy, or the game is missing from its records) and adds them. Only those files are uploaded. The folder is <code>Games\Age of Empires 2 DE\&lt;your id&gt;\savegame</code> in your user folder.</p>
@@ -425,11 +430,9 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
       <div class="tt-add" id="rv-add" hidden></div>
     </div>
 
-    <div class="tt-card" id="rv-coach-card" hidden>
-      <h2>Game breakdown</h2>
-      <p class="tt-note">Each player’s strategy, what went well and what to do better, read from the replay. Unit counts are units queued, so one that was cancelled still counts. Times are game time.</p>
-      <div class="tt-coach-grid" id="rv-coach"></div>
-    </div>
+    <!-- Game breakdown (site/js/breakdown.js): Overview · eAPM · Town Center idle · Army · Upgrades -->
+    <section class="bd" id="rv-breakdown" aria-label="Game breakdown" hidden></section>
+
 
     <div class="tt-card" id="rv-helper-card">
       <h2>Watch games in AoE2 on your PC</h2>
@@ -540,6 +543,7 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
 <script src="js/replay-folder.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/coach.js"></script>
+<script src="js/breakdown.js"></script>
 <script src="js/render.js"></script>
 <script src="js/profile.js"></script>
 <script src="js/compare.js"></script>

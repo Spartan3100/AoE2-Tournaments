@@ -294,12 +294,14 @@
   let anFor = '';
   function drawAnalyse(g) {
     const box = el('rv-analyse'), A = window.TT_ANALYSE;
-    const want = g && A && (['waiting', 'missing', 'unreadable'].includes(g.replay) || (g.replay === 'analysed' && !g.has_playback));
+    // analysed before the per-minute charts existed (pipeline/analyze.py ANALYSIS_V), and not yet tried again
+    const stale = g && g.replay === 'analysed' && Number(g.av || 1) < 2 && !Number(g.refreshed);
+    const want = g && A && (['waiting', 'missing', 'unreadable'].includes(g.replay) || (g.replay === 'analysed' && !g.has_playback) || stale);
     if (!want) { box.hidden = true; box.replaceChildren(); anFor = ''; return; }
     if (anFor === g.match_id) return; // a redraw keeps the message
     anFor = g.match_id;
     box.hidden = false;
-    const intro = {
+    const intro = stale ? 'This game was analysed before the eAPM, Town Center idle and army charts existed. Reading it again adds them, if Microsoft still has the replay.' : {
       analysed: 'The analysis is done, but the map playback isn’t built yet.',
       waiting: 'This game is waiting its turn: each update reads up to 60 replays, newest first.',
       missing: 'Microsoft’s server had no copy of this replay when it was last tried. It may have one now.',
@@ -333,67 +335,17 @@
     }, () => {});
   }
 
-  // "Game breakdown": each player's strategy, what went well and what to do better, units made and upgrades
-  // (coach.js). Analysis rows give the tracked players; the map playback, once loaded, adds everyone else and fills
-  // in what older analysis rows don't have.
-  function drawCoach(rows, pb, nPlayers) {
-    const card = el('rv-coach-card'), box = el('rv-coach'), K = window.TT_COACH, C = window.TT_CHARTS;
-    if (!K) { card.hidden = true; return; }
-    const tracked = new Set(rows.map((r) => Number(r.number)));
-    const people = rows.map((r) => ({ f: K.facts(r, pb), mine: true }))
-      .concat(pb ? pb.players.filter((p) => !tracked.has(p.number)).map((p) => ({ f: K.fromPlayback(pb, p.number), mine: false })) : [])
-      .filter((x) => x.f);
-    if (!people.length) { card.hidden = true; box.replaceChildren(); return; }
-    card.hidden = false;
-    const n = nPlayers || (pb ? pb.players.length : 2);
-    const charts = [];
-    box.replaceChildren(...people.map(({ f, mine }) => {
-      const opps = pb && f.team != null ? people.filter((x) => x.f.team !== f.team).map((x) => x.f) : null;
-      const t = K.game(f, opps, n);
-      const c = mk('section', 'tt-coach');
-      const won = Number(f.won) === 1;
-      const h = mk('h3', 'tt-coach-h');
-      h.append(mk('span', '', mine ? steamOr(f.name) : f.name), mk('span', 'tt-coach-civ', f.civ || ''), mk('span', `tt-coach-res ${won ? 'ok' : 'bad'}`, won ? 'Won' : 'Lost'));
-      c.append(h);
-      if (t.strategy.length) c.append(mk('p', 'tt-coach-strat', t.strategy.join(' ')));
-      const two = mk('div', 'tt-coach-two');
-      const list = (title, items, cls, none) => {
-        const d = mk('div', `tt-coach-list ${cls}`);
-        d.append(mk('h4', '', title));
-        if (!items.length) d.append(mk('p', 'tt-note', none));
-        else { const ul = mk('ul'); items.forEach((x) => ul.append(mk('li', '', x.text))); d.append(ul); }
-        return d;
-      };
-      two.append(list('What went well', t.well, 'ok', 'Nothing stood out either way.'), list('What to do better', t.better, 'bad', 'Nothing obvious to fix.'));
-      c.append(two);
-      c.append(mk('h4', 'tt-coach-sub', 'Units made'));
-      if (!f.units) c.append(mk('p', 'tt-note', 'This replay doesn’t record units (an older game version), so only buildings and upgrades are known.'));
-      else {
-        const vill = f.units.filter((u) => u.unit === 'Villager').reduce((s2, u) => s2 + u.count, 0);
-        const army = f.units.filter((u) => u.unit !== 'Villager');
-        if (vill) c.append(mk('p', 'tt-note', `${vill} villagers${army.length ? ', and:' : '.'}`));
-        if (army.length) {
-          const hb = mk('div', 'tt-coach-units');
-          c.append(hb);
-          const top = army.slice(0, 14), mx = Math.max(...top.map((u) => u.count));
-          charts.push(() => C.hbars(hb, top.map((u) => {
-            const tip = `${u.unit} · ${u.cls}\n${u.count} made`;
-            return { label: u.unit, tip, panels: [{ segs: [{ v: u.count, color: 'var(--color-fg-muted)' }], txt: String(u.count), tip }] };
-          }), { panels: [{ max: mx }], rowH: 24, label: `Units ${f.name} made` }));
-          if (army.length > top.length) c.append(mk('p', 'tt-note', `Also ${army.slice(top.length).map((u) => `${u.unit} ${u.count}`).join(', ')}.`));
-        } else c.append(mk('p', 'tt-note', 'No soldiers.'));
-      }
-      if (f.production && Object.keys(f.production).length) {
-        c.append(mk('h4', 'tt-coach-sub', 'Buildings'));
-        c.append(mk('p', 'tt-coach-line', Object.entries(f.production).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k} ${v}`).join(' · ')));
-      }
-      if (f.key && f.key.size) {
-        c.append(mk('h4', 'tt-coach-sub', 'Upgrades, in order'));
-        c.append(mk('p', 'tt-coach-line', [...f.key].filter(([k]) => !/ Age$/.test(k)).sort((x, y) => x[1] - y[1]).map(([k, m]) => `${k} ${K.mmss(m)}`).join(' · ')));
-      }
-      return c;
-    }));
-    if (C) charts.forEach((fn) => { try { fn(); } catch (e) { console.error('breakdown chart', e); } });
+  // "Game breakdown" (site/js/breakdown.js): the matchup report with its Overview, eAPM, Town Center idle, Army and
+  // Upgrades tabs. Analysis rows give the tracked players; the map playback, once loaded, adds everyone else and the
+  // per-minute series older analysis rows lack.
+  function drawCoach(rows, pb, nPlayers, g) {
+    const host = el('rv-breakdown');
+    if (!window.TT_BREAKDOWN || (!rows.length && !pb)) { host.hidden = true; host.replaceChildren(); return; }
+    const ok = (id) => { const d = dash.data(id); return d.status === 'ok' ? d.data : []; };
+    window.TT_BREAKDOWN.draw(host, {
+      rows, pb, game: g, map: (g && g.map) || (pb && pb.map) || '', nPlayers,
+      hist: ok('history'), ana: ok('replay_analysis'), styles: new Map(ok('civ_styles').map((r) => [r.civ, r.style])), nameOf: steamOr,
+    });
   }
 
   // "Add your replay": for a game with no replay on Microsoft's server, or missing from its match history. The next
@@ -682,10 +634,10 @@
       grid.replaceChildren();
       const sp = pb.status === 'ok' && Array.isArray(pb.data) ? window.TT_unpack(pb.data) : null;
       if (sp) grid.replaceChildren(...buildCards(sp, 'pb_sample'));
-      drawCoach([], sp && !sp.old ? sp : null, 0);
+      drawCoach([], sp && !sp.old ? sp : null, 0, { match_id: 'sample', map: sp && sp.map });
       return;
     }
-    if (an.status !== 'ok') drawCoach([], null, 0);
+    if (an.status !== 'ok') drawCoach([], null, 0, g);
     if (an.status === 'error') failed(ctab.tBodies[0]);
     else if (an.status === 'ok') {
       const rows = an.data.filter((a) => String(a.match_id) === String(mid));
@@ -716,7 +668,7 @@
       ], ['match_id', 'profile_id'], { emptyText: 'No replay analysis for this game.' });
       const pbd = pbId ? dash.data(pbId) : null;
       const upb = pbd && pbd.status === 'ok' && Array.isArray(pbd.data) ? window.TT_unpack(pbd.data) : null;
-      drawCoach(rows, upb && !upb.old ? upb : null, hs.length ? Number(hs[0].players_n) || 0 : 0);
+      drawCoach(rows, upb && !upb.old ? upb : null, hs.length ? Number(hs[0].players_n) || 0 : 0, g);
       if (upb) grid.replaceChildren(...buildCards(upb, pbId));
       else grid.replaceChildren(...rows.map((a) => {
         const c = mk('div', 'tt-card');
