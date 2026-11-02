@@ -83,6 +83,19 @@ BEACH = {2, 52, 79, 80, 81, 82, 83, 107, 108, 109}
 FOREST = {10, 13, 17, 18, 19, 20, 21, 44, 45, 48, 49, 50, 104, 105}
 TREE_WORDS = ('Tree', 'Forest', 'Bamboo', 'Palm', 'Pine', 'Oak', 'Birch', 'Jungle', 'Cypress', 'Mangrove', 'Baobab', 'Acacia', 'Olive', 'Dragon')
 RESOURCES = {'Gold Mine': 'g', 'Stone Mine': 's', 'Relic': 'r', 'Forage Bush': 'f', 'Fruit Bush': 'f'}
+# upgrades the game breakdown checks (site/js/coach.js): economy, blacksmith and the common unit lines
+KEY_TECHS = {'Loom', 'Double-Bit Axe', 'Bow Saw', 'Two-Man Saw', 'Horse Collar', 'Heavy Plow', 'Crop Rotation', 'Wheelbarrow',
+             'Hand Cart', 'Gold Mining', 'Gold Shaft Mining', 'Stone Mining', 'Stone Shaft Mining', 'Fletching', 'Bodkin Arrow',
+             'Bracer', 'Padded Archer Armor', 'Leather Archer Armor', 'Ring Archer Armor', 'Forging', 'Iron Casting',
+             'Blast Furnace', 'Scale Mail Armor', 'Chain Mail Armor', 'Plate Mail Armor', 'Scale Barding Armor',
+             'Chain Barding Armor', 'Plate Barding Armor', 'Bloodlines', 'Husbandry', 'Thumb Ring', 'Ballistics', 'Chemistry',
+             'Conscription', 'Squires', 'Gambesons', 'Man-at-Arms', 'Long Swordsman', 'Two-Handed Swordsman', 'Champion',
+             'Pikeman', 'Halberdier', 'Crossbowman', 'Arbalester', 'Elite Skirmisher', 'Light Cavalry', 'Hussar', 'Cavalier',
+             'Paladin', 'Heavy Camel Rider', 'Imperial Camel Rider', 'Elite Eagle Warrior', 'Heavy Cavalry Archer', 'Onager',
+             'Siege Onager', 'Capped Ram', 'Siege Ram', 'Elite Battle Elephant', 'Elite Steppe Lancer', 'Redemption', 'Atonement',
+             'Sanctity', 'Fervor', 'Town Watch', 'Town Patrol', 'Murder Holes', 'Masonry', 'Architecture', 'Treadmill Crane'}
+FEUDAL_RESEARCH_S, VILLAGER_S, LOOM_S = 130, 25, 25  # seconds the Town Center spends on each
+NOT_PRODUCTION = {'House', 'Farm', 'Palisade Wall', 'Palisade Gate', 'Stone Wall', 'Gate', 'Fortified Wall', 'Outpost', 'Fish Trap'}
 
 
 def mins(td):
@@ -362,6 +375,35 @@ def parse_replay(path, match_id='', keep_playback=True):
         defense_style = ', '.join(parts) if parts else 'Minimal defense'
 
         vills = total.get('Villager', 0)
+        # Dark Age: the Town Center's queue played out until Feudal Age research started (it takes 130 s, so it began
+        # then): villagers made before it, and how long the Town Center stood idle with nothing queued. Cancelled
+        # villagers still count as made, so the idle time is if anything a little low.
+        click = (feudal - _td(FEUDAL_RESEARCH_S)) if feudal else None
+        dark_vills = dark_idle = None
+        if has_units and click is not None:
+            jobs = [(t.total_seconds(), VILLAGER_S, a) for t, u, a in q if u == 'Villager' and t < click]
+            jobs += [(t.total_seconds(), LOOM_S, 1) for t, n in research[pn] if n == 'Loom' and t < click][:1]
+            free, idle, made, end = 0.0, 0.0, 0, click.total_seconds()
+            for t0, each, n in sorted(jobs):
+                if t0 > free:
+                    idle += t0 - free
+                    free = t0
+                for _ in range(n):
+                    if free >= end:
+                        break
+                    free += each
+                    made += 1 if each == VILLAGER_S else 0
+            idle += max(0.0, end - free)
+            dark_vills, dark_idle = made, round(idle)
+        vills_castle = sum(a for t, u, a in q if u == 'Villager' and castle is not None and t < castle) if has_units and castle else None
+        army = lambda c: ', '.join(f'{k} {v}' for k, v in sorted(c.items(), key=lambda kv: -kv[1]))
+        first_research = {}
+        for t, n in research[pn]:
+            if n in KEY_TECHS and n not in first_research:
+                first_research[n] = t
+        uc_all = collections.Counter()
+        for t, u, a in q:
+            uc_all[u] += a
         row = {
             'match_id': str(match_id), 'number': pn, 'name': p.name, 'profile_id': str(p.profile_id or ''),
             'civ': p.civilization, 'team': team.get(pn), 'won': 1 if p.winner else 0,
@@ -376,12 +418,17 @@ def parse_replay(path, match_id='', keep_playback=True):
             'castles': castles, 'town_centers': bcount.get('Town Center', 0) + 1, 'market_trades': trades[pn],
             'techs': len(research[pn]), 'unit_data': bool(has_units),
             'resigned_min': mins(resign.get(pn)),
+            # for the game breakdown (site/js/coach.js)
+            'units': '; '.join(f'{u} {c}' for u, c in uc_all.most_common()) if has_units else '',
+            'feudal_army': army(fmil) if has_units else '', 'castle_army': army(cmil) if has_units else '',
+            'imp_army': army(lmil) if has_units else '',
+            'dark_vills': dark_vills, 'dark_idle_s': dark_idle, 'vills_castle': vills_castle,
+            'farms': bcount.get('Farm', 0),
+            'production': ', '.join(f'{k} {v}' for k, v in bcount.most_common() if k not in NOT_PRODUCTION and k not in TOWERS),
+            'key_techs': '; '.join(f'{n} {mins(t):.1f}' for n, t in first_research.items()),
         }
         rows.append(row)
-        uc = collections.Counter()
-        for t, u, a in q:
-            uc[u] += a
-        for u, c in uc.most_common():
+        for u, c in uc_all.most_common():
             units_rows.append({'match_id': str(match_id), 'number': pn, 'name': p.name, 'unit': u,
                                'class': UNIT_CLASS.get(u, 'Unique units'), 'count': c})
         # build order: first 30 items (builds, techs, age ups, first of each unit)

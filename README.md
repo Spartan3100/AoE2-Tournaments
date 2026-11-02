@@ -87,6 +87,10 @@ Everyone invited sees a change straight away; the next update writes it into `co
 
 *Adding replays:* in **Games**, a game Microsoft has no replay of, or left out of its match history, offers **Add replay** to players and organizers. The file goes to a private Supabase storage bucket; the next update checks it is that game (right player, right time) and reads it. This needs `supabase/schema.sql` run again after 2026-10-24 (it adds the `replay_uploads` table and the `replays` bucket).
 
+*Analyse now:* in **Games**, a game whose replay hasn't been read yet (or wasn't found, or couldn't be read, or has no map playback yet) offers **Analyse now** to players and organizers. It puts the game first in the replay queue and starts an update straight away; that update skips the slow download of older match history, so the game is usually ready in a few minutes. Uses the same GitHub token as Sync now, and needs `supabase/schema.sql` run again after 2026-11-02 (it adds the `analysis_requests` table and `request_analysis()`). Without the token, the game is still first in line at the next scheduled update.
+
+*Game breakdown and strengths:* each analysed game in **Games** has a **Game breakdown** for every player (strategy, units made, buildings, upgrades in order, what went well and what to do better), and each profile has **Strengths and weaknesses** across the games in view, compared with the other players on the site. Games analysed before 2026-11-02 get the full breakdown from their map playback; their unit and upgrade details count towards a profile's strengths once re-read.
+
 Everything also lives in `config/` and is edited on GitHub (pencil icon), or by asking Claude Code to do it:
 
 | File | What it holds |

@@ -201,6 +201,12 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
 
     <section class="tt-card pf-sec" id="pf-board-card" aria-label="Headline numbers"><div id="pf-board"></div></section>
 
+    <section class="tt-card pf-sec" id="pf-coach-card">
+      <div class="pf-head"><h2>Strengths and weaknesses</h2></div>
+      <p class="tt-note" id="pf-coach-note"></p>
+      <div id="pf-coach"></div>
+    </section>
+
     <section class="tt-card pf-sec" id="pf-rating-card">
       <div class="pf-head"><h2 id="pf-rating-title">Rating over time</h2><button type="button" class="tt-chip" id="pf-qp" aria-pressed="true" hidden>Show Quick Play</button></div>
       <p class="tt-note" id="pf-rating-note"></p>
@@ -415,7 +421,14 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
       <p class="tt-note" id="rv-game-note">Pick a game above.</p>
       <div class="tt-links" id="rv-links"></div>
       <p class="tt-note" id="rv-dl-note"></p>
+      <div class="tt-add" id="rv-analyse" hidden></div>
       <div class="tt-add" id="rv-add" hidden></div>
+    </div>
+
+    <div class="tt-card" id="rv-coach-card" hidden>
+      <h2>Game breakdown</h2>
+      <p class="tt-note">Each player’s strategy, what went well and what to do better, read from the replay. Unit counts are units queued, so one that was cancelled still counts. Times are game time.</p>
+      <div class="tt-coach-grid" id="rv-coach"></div>
     </div>
 
     <div class="tt-card" id="rv-helper-card">
@@ -526,6 +539,7 @@ try { const t = localStorage.getItem('tt-theme'); if (t === 'clean' || t === 'da
 <script src="js/viewer.js"></script>
 <script src="js/replay-folder.js"></script>
 <script src="js/charts.js"></script>
+<script src="js/coach.js"></script>
 <script src="js/render.js"></script>
 <script src="js/profile.js"></script>
 <script src="js/compare.js"></script>

@@ -393,6 +393,46 @@
     host.append(split);
   }
 
+  // ---------------------------------------------------------------- strengths and weaknesses (coach.js)
+  // Timings and habits against the other players here, what wins and loses, and the game breakdown's tips that keep
+  // coming up, over the games in view that have an analysed replay.
+  let coachMemo = { key: null, val: null };
+  function coach(X) {
+    const host = el('pf-coach'), note = el('pf-coach-note');
+    host.replaceChildren();
+    const K = window.TT_COACH;
+    const reps = X.g.map((r) => X.rep.get(String(r.match_id))).filter(Boolean);
+    const ana = dash.data('replay_analysis');
+    note.textContent = `From the ${num(reps.length)} game${reps.length === 1 ? '' : 's'} with an analysed replay in this view${X.g.length > reps.length ? ` (of ${num(X.g.length)})` : ''}, compared with the other players on this site. Times are game time. Open a game under Games for its full breakdown.`;
+    if (!K) return;
+    if (reps.length < 3) { host.append(empty(X.g.length ? 'Needs at least 3 games with an analysed replay in this view.' : 'No games in this view and period.')); return; }
+    const all = ana.status === 'ok' ? ana.data : [];
+    let res;
+    if (coachMemo.key && coachMemo.key[0] === X.g && coachMemo.key[1] === all) res = coachMemo.val;
+    else {
+      res = K.player(reps, all.filter((a) => a.player && a.player !== X.player), X.g);
+      coachMemo = { key: [X.g, all], val: res };
+    }
+    const col = (title, items, cls, none) => {
+      const d = mk('div', 'pf-coach-col');
+      d.append(mk('h3', 'pf-subh', title));
+      if (!items.length) { d.append(mk('p', 'tt-note', none)); return d; }
+      const ul = mk('ul', 'pf-coach-list');
+      items.forEach((x) => {
+        const li = mk('li', `pf-coach-i ${cls}`);
+        const body = mk('div');
+        body.append(mk('b', '', x.title), mk('div', 'pf-small', x.detail));
+        li.append(mk('span', 'pf-coach-mark', cls === 'ok' ? '+' : '−'), body);
+        ul.append(li);
+      });
+      d.append(ul);
+      return d;
+    };
+    const two = mk('div', 'pf-two');
+    two.append(col('Strengths', res.strengths, 'ok', 'Nothing stands out yet.'), col('To work on', res.weaknesses, 'bad', 'Nothing stands out yet.'));
+    host.append(two);
+  }
+
   // ---------------------------------------------------------------- 8. recent form
   function form(X) {
     const host = el('pf-form');
@@ -595,7 +635,7 @@
   }
 
   // ---------------------------------------------------------------- the page
-  const SECTIONS = ['pf-board', 'pf-rating', 'pf-civs', 'pf-maps', 'pf-vs', 'pf-length', 'pf-hours', 'pf-strat', 'pf-form', 'pf-mates', 'pf-combos'];
+  const SECTIONS = ['pf-board', 'pf-coach', 'pf-rating', 'pf-civs', 'pf-maps', 'pf-vs', 'pf-length', 'pf-hours', 'pf-strat', 'pf-form', 'pf-mates', 'pf-combos'];
   function loading(cls) { SECTIONS.forEach((id) => { const n = el(id); n.replaceChildren(); if (cls === 'error') n.append(empty('Failed to load')); else n.classList.toggle('pf-loading', true); }); }
 
   function draw(ctx) {
@@ -621,7 +661,7 @@
     X.rating = ratingSeries(X);
     last = X;
     // one failing section must not blank the rest of the page
-    [board, rating, civs, maps, matchups, when, strategy, form, teams, deeper].forEach((fn) => { try { fn(X); } catch (e) { console.error(`profile ${fn.name}`, e); } });
+    [board, coach, rating, civs, maps, matchups, when, strategy, form, teams, deeper].forEach((fn) => { try { fn(X); } catch (e) { console.error(`profile ${fn.name}`, e); } });
   }
 
   // the Overall / By month switch on Maps

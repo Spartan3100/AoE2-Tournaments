@@ -288,6 +288,114 @@
     noresult: 'Microsoft recorded this game without a result (usually a disconnect), so it counts as a game played but not as a win or a loss.',
     norecord: 'Microsoft counted this on the ladder but left it out of its match history, so no site can list it. It was found from a jump in rating between the games before and after it, so its time is approximate, it may be more than one game, and its map, civs and replay are unknown. It counts as a game played but not in win rates.',
   };
+  // "Analyse now": a game still in the replay queue (or whose replay wasn't found or couldn't be read, or whose map
+  // playback isn't built) goes first at the next update, which this starts. Supabase request_analysis() records it;
+  // pipeline/run.py reads it first and skips that run's slow history backfill.
+  let anFor = '';
+  function drawAnalyse(g) {
+    const box = el('rv-analyse'), A = window.TT_ANALYSE;
+    const want = g && A && (['waiting', 'missing', 'unreadable'].includes(g.replay) || (g.replay === 'analysed' && !g.has_playback));
+    if (!want) { box.hidden = true; box.replaceChildren(); anFor = ''; return; }
+    if (anFor === g.match_id) return; // a redraw keeps the message
+    anFor = g.match_id;
+    box.hidden = false;
+    const intro = {
+      analysed: 'The analysis is done, but the map playback isn’t built yet.',
+      waiting: 'This game is waiting its turn: each update reads up to 60 replays, newest first.',
+      missing: 'Microsoft’s server had no copy of this replay when it was last tried. It may have one now.',
+      unreadable: 'This replay couldn’t be read last time. It can be tried again.',
+    }[g.replay];
+    box.replaceChildren(mk('h4', '', 'Analyse it now'),
+      mk('p', 'tt-note', `${intro} “Analyse now” puts it first and starts an update straight away. That update skips the slow history download, so it’s usually ready in a few minutes.`));
+    if (!A.can()) { box.append(mk('p', 'tt-note', 'Players and organizers can ask for this.')); return; }
+    const msg = mk('p', 'tt-note');
+    msg.setAttribute('role', 'status');
+    const go = mk('button', 'tt-btn', 'Analyse now'); go.type = 'button';
+    const mid = g.match_id;
+    go.addEventListener('click', async () => {
+      go.disabled = true; msg.textContent = 'Asking…';
+      try {
+        const r = await A.request(mid);
+        if (r && r.at) {
+          msg.textContent = r.started ? 'It’s first in line. Reload when the update above finishes.' : 'It’s first in line for the update that’s running now. Reload when it finishes.';
+          syncStarted(r.at);
+        } else msg.textContent = (r && r.message) || 'It’s first in line at the next update (every 30 minutes).';
+      } catch (e) { msg.textContent = `Couldn’t ask: ${e.message || e}`; go.disabled = false; }
+    });
+    const row = mk('div', 'tt-links');
+    row.append(go, mk('span', 'tt-label tt-sync-msg', SYNC.text));
+    box.append(row, msg);
+    A.latest(mid).then((r) => {
+      if (anFor !== mid || !r || msg.textContent) return;
+      msg.textContent = r.status === 'waiting'
+        ? `Asked at ${d3.timeFormat('%H:%M')(new Date(r.created_at))}: it’s first in line at the next update.`
+        : `Last asked ${d3.timeFormat('%b %-d, %H:%M')(new Date(r.created_at))}: ${r.message || 'done.'}`;
+    }, () => {});
+  }
+
+  // "Game breakdown": each player's strategy, what went well and what to do better, units made and upgrades
+  // (coach.js). Analysis rows give the tracked players; the map playback, once loaded, adds everyone else and fills
+  // in what older analysis rows don't have.
+  function drawCoach(rows, pb, nPlayers) {
+    const card = el('rv-coach-card'), box = el('rv-coach'), K = window.TT_COACH, C = window.TT_CHARTS;
+    if (!K) { card.hidden = true; return; }
+    const tracked = new Set(rows.map((r) => Number(r.number)));
+    const people = rows.map((r) => ({ f: K.facts(r, pb), mine: true }))
+      .concat(pb ? pb.players.filter((p) => !tracked.has(p.number)).map((p) => ({ f: K.fromPlayback(pb, p.number), mine: false })) : [])
+      .filter((x) => x.f);
+    if (!people.length) { card.hidden = true; box.replaceChildren(); return; }
+    card.hidden = false;
+    const n = nPlayers || (pb ? pb.players.length : 2);
+    const charts = [];
+    box.replaceChildren(...people.map(({ f, mine }) => {
+      const opps = pb && f.team != null ? people.filter((x) => x.f.team !== f.team).map((x) => x.f) : null;
+      const t = K.game(f, opps, n);
+      const c = mk('section', 'tt-coach');
+      const won = Number(f.won) === 1;
+      const h = mk('h3', 'tt-coach-h');
+      h.append(mk('span', '', mine ? steamOr(f.name) : f.name), mk('span', 'tt-coach-civ', f.civ || ''), mk('span', `tt-coach-res ${won ? 'ok' : 'bad'}`, won ? 'Won' : 'Lost'));
+      c.append(h);
+      if (t.strategy.length) c.append(mk('p', 'tt-coach-strat', t.strategy.join(' ')));
+      const two = mk('div', 'tt-coach-two');
+      const list = (title, items, cls, none) => {
+        const d = mk('div', `tt-coach-list ${cls}`);
+        d.append(mk('h4', '', title));
+        if (!items.length) d.append(mk('p', 'tt-note', none));
+        else { const ul = mk('ul'); items.forEach((x) => ul.append(mk('li', '', x.text))); d.append(ul); }
+        return d;
+      };
+      two.append(list('What went well', t.well, 'ok', 'Nothing stood out either way.'), list('What to do better', t.better, 'bad', 'Nothing obvious to fix.'));
+      c.append(two);
+      c.append(mk('h4', 'tt-coach-sub', 'Units made'));
+      if (!f.units) c.append(mk('p', 'tt-note', 'This replay doesn’t record units (an older game version), so only buildings and upgrades are known.'));
+      else {
+        const vill = f.units.filter((u) => u.unit === 'Villager').reduce((s2, u) => s2 + u.count, 0);
+        const army = f.units.filter((u) => u.unit !== 'Villager');
+        if (vill) c.append(mk('p', 'tt-note', `${vill} villagers${army.length ? ', and:' : '.'}`));
+        if (army.length) {
+          const hb = mk('div', 'tt-coach-units');
+          c.append(hb);
+          const top = army.slice(0, 14), mx = Math.max(...top.map((u) => u.count));
+          charts.push(() => C.hbars(hb, top.map((u) => {
+            const tip = `${u.unit} · ${u.cls}\n${u.count} made`;
+            return { label: u.unit, tip, panels: [{ segs: [{ v: u.count, color: 'var(--color-fg-muted)' }], txt: String(u.count), tip }] };
+          }), { panels: [{ max: mx }], rowH: 24, label: `Units ${f.name} made` }));
+          if (army.length > top.length) c.append(mk('p', 'tt-note', `Also ${army.slice(top.length).map((u) => `${u.unit} ${u.count}`).join(', ')}.`));
+        } else c.append(mk('p', 'tt-note', 'No soldiers.'));
+      }
+      if (f.production && Object.keys(f.production).length) {
+        c.append(mk('h4', 'tt-coach-sub', 'Buildings'));
+        c.append(mk('p', 'tt-coach-line', Object.entries(f.production).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k} ${v}`).join(' · ')));
+      }
+      if (f.key && f.key.size) {
+        c.append(mk('h4', 'tt-coach-sub', 'Upgrades, in order'));
+        c.append(mk('p', 'tt-coach-line', [...f.key].filter(([k]) => !/ Age$/.test(k)).sort((x, y) => x[1] - y[1]).map(([k, m]) => `${k} ${K.mmss(m)}`).join(' · ')));
+      }
+      return c;
+    }));
+    if (C) charts.forEach((fn) => { try { fn(); } catch (e) { console.error('breakdown chart', e); } });
+  }
+
   // "Add your replay": for a game with no replay on Microsoft's server, or missing from its match history. The next
   // update checks it is this game (pipeline/run.py check_upload) and reads it like a downloaded replay.
   let addFor = '';
@@ -517,6 +625,7 @@
     const title = el('rv-game-title'), note = el('rv-game-note'), lk = el('rv-links');
     if (isSample) {
       drawAdd(null);
+      drawAnalyse(null);
       title.textContent = 'Sample game';
       el('rv-dl-note').replaceChildren();
       note.textContent = 'A public replay of two pro players, included so you can try the viewer before your own games are analyzed.';
@@ -545,6 +654,7 @@
         dl.append(code, '. A downloaded replay is a game file, not a video, so media players can’t open it.');
       }
       drawAdd(g);
+      drawAnalyse(g);
       const s = mk('button', 'tt-btn', 'Try the sample game'); s.type = 'button';
       s.addEventListener('click', () => dash.setParams({ m: 'sample' }));
       if (dash.data('pb_sample').status === 'ok') lk.appendChild(s); // the sample game is optional (data/playback/pb_sample.json)
@@ -572,8 +682,10 @@
       grid.replaceChildren();
       const sp = pb.status === 'ok' && Array.isArray(pb.data) ? window.TT_unpack(pb.data) : null;
       if (sp) grid.replaceChildren(...buildCards(sp, 'pb_sample'));
+      drawCoach([], sp && !sp.old ? sp : null, 0);
       return;
     }
+    if (an.status !== 'ok') drawCoach([], null, 0);
     if (an.status === 'error') failed(ctab.tBodies[0]);
     else if (an.status === 'ok') {
       const rows = an.data.filter((a) => String(a.match_id) === String(mid));
@@ -604,6 +716,7 @@
       ], ['match_id', 'profile_id'], { emptyText: 'No replay analysis for this game.' });
       const pbd = pbId ? dash.data(pbId) : null;
       const upb = pbd && pbd.status === 'ok' && Array.isArray(pbd.data) ? window.TT_unpack(pbd.data) : null;
+      drawCoach(rows, upb && !upb.old ? upb : null, hs.length ? Number(hs[0].players_n) || 0 : 0);
       if (upb) grid.replaceChildren(...buildCards(upb, pbId));
       else grid.replaceChildren(...rows.map((a) => {
         const c = mk('div', 'tt-card');
@@ -850,6 +963,13 @@
       if (run) syncSay('running', `Syncing: ${run.status === 'queued' ? 'waiting for its turn' : `running since ${d3.timeFormat('%H:%M')(new Date(run.run_started_at || run.created_at))}`}. Usually 5–10 minutes.`);
     } catch (e) { /* try again next tick */ }
     SYNC.timer = setTimeout(syncFollow, 20e3);
+  }
+  // a sync started elsewhere ("Analyse now"): follow it like one started here
+  function syncStarted(at) {
+    clearTimeout(SYNC.timer);
+    SYNC.at = at ? Date.parse(at) : Date.now();
+    syncSay('running', 'Update started. Usually ready in a few minutes.');
+    SYNC.timer = setTimeout(syncFollow, 8e3);
   }
   async function syncNow() {
     if (SYNC.phase === 'done') { location.reload(); return; }

@@ -44,7 +44,9 @@ AN_COLS = ['match_id', 'number', 'name', 'profile_id', 'civ', 'won', 'map', 'dur
            'imperial_min', 'opening', 'castle_plan', 'late_army', 'attack_style', 'defense_style', 'first_attack_min', 'aggression',
            'raid_minutes', 'villagers', 'military_units', 'palisade_tiles', 'stone_wall_tiles', 'towers', 'castles', 'town_centers',
            'market_trades', 'techs', 'unit_data', 'resigned_min', 'player', 'started', 'type', 'opp_civs', 'opp_openings',
-           'build_order', 'unit_mix']
+           'build_order', 'unit_mix', 'units', 'feudal_army', 'castle_army', 'imp_army', 'dark_vills', 'dark_idle_s',
+           'vills_castle', 'farms', 'production', 'key_techs', 'opp_army', 'opp_military', 'opp_villagers', 'opp_eapm',
+           'opp_feudal_min', 'opp_castle_min', 'opp_imperial_min']
 GAME_COLS = ['match_id', 'started', 'type', 'map', 'players_tracked', 'checked_at', 'map_size', 'dimension', 'duration_min',
              'rated', 'version', 'players', 'status', 'has_playback', 'playback_id', 'replay_profile_id', 'retried', 'reader', 'error']
 
@@ -360,10 +362,18 @@ def main():
                 break
             time.sleep(1)
 
+    # games a member asked to have analysed now ("Analyse now" on the site, Supabase table analysis_requests, fetched
+    # by pipeline/uploads.py): read first, and this run skips the slow history backfill so the game shows sooner
+    priority = [r for r in load(os.path.join(a.inp, 'priority.json'), []) if isinstance(r, dict) and r.get('match_id')]
+    listed = {mid for (_, mid) in known}
+    rushed = [str(r['match_id']) for r in priority if str(r['match_id']) in listed]
+
     # 1b. older games: each player's full history, a few pages per run (AoE2 Companion refuses quick bursts of
     # requests with "429 Too Many Requests"), resuming where the last run stopped. New games only push older ones
     # onto later pages, so resuming by page number can repeat a game (skipped as known) but never miss one.
-    pages_left = a.backfill_pages
+    pages_left = 0 if rushed else a.backfill_pages
+    if rushed:
+        stats_note.append(f'history backfill skipped this run: {len(set(rushed))} game(s) asked to be analysed first')
     for pid, name in roster.items():
         st = backfill.setdefault(pid, {'page': 1, 'done': False, 'v': BACKFILL_V})
         while not st['done'] and pages_left > 0:
@@ -414,13 +424,21 @@ def main():
     # stats survive after Microsoft deletes the replay
     rcut = (now - dt.timedelta(days=a.replay_days)).strftime('%Y-%m-%dT%H:%M:%SZ') if a.replay_days else ''
     by_match = {}
+    rush = set(rushed)
     for r in history:
-        if r['started'] >= rcut and r['type'] != 'Other':
+        if (r['started'] >= rcut and r['type'] != 'Other') or r['match_id'] in rush:
             by_match.setdefault(r['match_id'], []).append(r)
     status = {g['match_id']: g for g in games}
     todo, again = {}, {}
     for mid, rows in by_match.items():
         g = status.get(mid)
+        if mid in rush and g is not None:
+            # asked for: try again whatever happened before (Microsoft's copy may be up now, or the reader better)
+            if g.get('status') == 'Analyzed, playback expired':
+                again[mid] = rows
+            elif g.get('status') != 'Analyzed':
+                todo[mid] = rows
+            continue
         if g is None:
             todo[mid] = rows
         elif g.get('status') == 'No replay' and not g.get('retried') and any(r.get('replay_ids') for r in rows):
@@ -437,12 +455,18 @@ def main():
     for g in games:
         if g.get('status') == 'Could not read' and is_scenario(by_match.get(g['match_id'], [])) :
             g['status'] = 'Custom scenario'
-    order = sorted(((k, v) for k, v in todo.items() if k in uploaded), key=lambda kv: kv[1][0]['started'], reverse=True) + \
-        sorted(((k, v) for k, v in todo.items() if k not in uploaded), key=lambda kv: kv[1][0]['started'], reverse=True) + \
-        sorted(again.items(), key=lambda kv: kv[1][0]['started'], reverse=True)
+    first = [(k, v) for k, v in list(todo.items()) + list(again.items()) if k in rush]
+    order = first + \
+        sorted(((k, v) for k, v in todo.items() if k in uploaded and k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True) + \
+        sorted(((k, v) for k, v in todo.items() if k not in uploaded and k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True) + \
+        sorted(((k, v) for k, v in again.items() if k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True)
+    # a run with games asked for stays short: those, then a few others
+    max_replays = min(a.max_replays, len(first) + 10) if first else a.max_replays
+    tried_ids = set()
     for mid, rows in order:
-        if tried >= a.max_replays:
+        if tried >= max_replays:
             break
+        tried_ids.add(mid)
         tried += 1
         playback_only = mid in again
         old = status.get(mid)
@@ -530,6 +554,7 @@ def main():
         pid_to_player = roster
         names_by_pid = {}
         by_num = {r['number']: r for r in res['players']}
+        team_of = {r['number']: r.get('team') for r in res['players']}  # read before 'team' is dropped from each row below
         for row in ([] if playback_only else res['players']):
             row['player'] = pid_to_player.get(str(row.get('profile_id') or ''), '')
             if not row['player']:
@@ -539,9 +564,21 @@ def main():
             official = next((h for h in rows if h['player'] == row['player']), None)
             if official is not None:
                 row['won'] = int(official['won'])  # the official result beats the replay's own guess
-            opp = [o for o in res['players'] if o.get('team') != row.get('team')]
+            opp = [o for o in res['players'] if team_of[o['number']] != team_of[row['number']]]
             row['opp_civs'] = ', '.join(o['civ'] for o in opp)
             row['opp_openings'] = ', '.join(o['opening'] for o in opp)
+            # what the other side did, for the game breakdown (site/js/coach.js): their army and, for team games,
+            # the average of their timings
+            onums = {o['number'] for o in opp}
+            ocls = {}
+            for u in res['units']:
+                if u['number'] in onums and u['class'] not in ('Villager', 'Trade'):
+                    ocls[u['class']] = ocls.get(u['class'], 0) + u['count']
+            row['opp_army'] = ', '.join(f'{k} {v}' for k, v in sorted(ocls.items(), key=lambda kv: -kv[1]))
+            for f in ('military_units', 'villagers', 'eapm', 'feudal_min', 'castle_min', 'imperial_min'):
+                vals = [o[f] for o in opp if o.get(f) is not None]
+                name = {'military_units': 'opp_military', 'villagers': 'opp_villagers'}.get(f, 'opp_' + f)
+                row[name] = round(sum(vals) / len(vals), 2) if vals else None
             row.pop('team', None)
             steps = [b for b in res['build'] if b['number'] == row['number']]
             row['build_order'] = '; '.join(f"{b['min']:.1f} {b['item']}" for b in steps[:18] if b['min'] is not None)
@@ -562,6 +599,37 @@ def main():
         games.append({**base, **{k: v for k, v in res['game'].items() if k != 'match_id'}, 'status': 'Analyzed',
                       'has_playback': 1, 'playback_id': f'pb_{mid}', 'replay_profile_id': used_pid, 'uploaded': 1 if mid in uploaded else 0})
         new_pb.append({'match_id': mid, 'file': fname, 'title': f"Playback {base['map']} {base['started'][:10]}"[:40]})
+
+    # what became of each "Analyse now" request (pipeline/uploads.py mark records it once the site is published);
+    # one left out stays waiting for the next run
+    final = {g['match_id']: g for g in games}
+    analysis_results = []
+    for r in priority:
+        mid, g = str(r['match_id']), final.get(str(r['match_id']))
+        try:
+            age_h = (now - dt.datetime.fromisoformat(str(r.get('created_at')).replace('Z', '+00:00'))).total_seconds() / 3600
+        except (TypeError, ValueError):
+            age_h = 0.0
+        st = (g or {}).get('status', '')
+        if mid not in by_match:
+            if age_h < 6:
+                continue  # just played: not in the match list yet
+            msg = 'This game isn’t in Microsoft’s match list, so there is no replay to read.'
+        elif st == 'Analyzed':
+            msg = 'Analysed.'
+        elif st == 'Analyzed, playback expired':
+            msg = 'Analysed. The replay is no longer on Microsoft’s server, so the map playback couldn’t be rebuilt.'
+        elif st == 'No replay':
+            msg = 'No player’s copy of the replay is on Microsoft’s server. If you have it, use “Add replay”.'
+        elif st == 'Could not read':
+            msg = 'The replay downloaded but couldn’t be read (usually a game update the replay reader doesn’t support yet).'
+        elif st == 'Custom scenario':
+            msg = 'This was a custom scenario, which has no standard openings or age-ups to analyse.'
+        elif mid in tried_ids and age_h >= 1:
+            msg = 'Microsoft’s server doesn’t have the replay yet. It’s tried again with every update for 3 days.'
+        else:
+            continue  # not reached this run, or the replay may still appear: try again first next run
+        analysis_results.append({'id': r['id'], 'status': 'done', 'message': msg})
 
     # ---------- 3. playback retention
     expired = []
@@ -589,6 +657,8 @@ def main():
         json.dump(backfill, f)
     with open(os.path.join(a.out, 'uploads_result.json'), 'w') as f:
         json.dump(upload_results, f)
+    with open(os.path.join(a.out, 'analysis_result.json'), 'w') as f:
+        json.dump(analysis_results, f)
     written = ['backfill.json']
     for name, rows, cols in (('history.json', history, None), ('unrecorded.json', unrecorded, None), ('replay_analysis.json', analysis, AN_COLS), ('replay_games.json', games, GAME_COLS)):
         if not rows and cols:
@@ -608,6 +678,7 @@ def main():
                   'replays_unreadable': outcome['unreadable'], 'custom_scenarios': outcome['scenario'], 'replay_download_errors': outcome['download_failed'],
                   'playbacks_stored': sum(1 for g in games if g.get('has_playback')),
                   'history_rows': len(history), 'analysis_rows': len(analysis),
+                  'analyse_now': {'asked': len(priority), 'done': len(analysis_results)},
                   'replays_added_on_site': {'done': sum(1 for r in upload_results if r['status'] == 'done'), 'rejected': sum(1 for r in upload_results if r['status'] != 'done')},
                   'games_without_result': len(no_result), 'rating_gaps': len(unrecorded) - len(no_result),
                   'history_backfill': {roster.get(k, k): ('done' if v.get('done') else f"page {v.get('page')}") for k, v in backfill.items()},
