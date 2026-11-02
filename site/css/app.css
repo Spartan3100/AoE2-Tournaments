@@ -248,6 +248,22 @@ html.tt-locked #dash-root { display: none; }
 .tt .tt-add-form .tt-input { width: auto; flex: 1 1 14rem; }
 .tt .tt-add-list { margin: var(--cds-pad-xs) 0 0; padding-left: 1.2em; }
 .tt .tt-add-list li { margin: 2px 0; }
+/* Games: game breakdown (render.js drawCoach, coach.js) */
+.tt .tt-coach-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--cds-gap-lg); }
+.tt .tt-coach { min-width: 0; padding: var(--cds-pad-md) var(--cds-pad-lg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); }
+.tt .tt-coach-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 var(--cds-gap-sm); font-size: var(--cds-font-size-heading); overflow-wrap: anywhere; }
+.tt .tt-coach-civ { color: var(--color-fg-muted); font-weight: 400; }
+.tt .tt-coach-res { font-size: var(--cds-font-size-caption); font-weight: 600; border-radius: 999px; padding: 1px 9px; }
+.tt .tt-coach-res.ok, .tt .tt-coach-list.ok h4 { color: var(--color-ok); }
+.tt .tt-coach-res.bad, .tt .tt-coach-list.bad h4 { color: var(--color-bad); }
+.tt .tt-coach-res.ok { background: color-mix(in srgb, var(--color-ok) 16%, var(--color-panel)); }
+.tt .tt-coach-res.bad { background: color-mix(in srgb, var(--color-bad) 16%, var(--color-panel)); }
+.tt .tt-coach-strat { margin: 0 0 var(--cds-gap-sm); }
+.tt .tt-coach-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 0 var(--cds-gap-lg); }
+.tt .tt-coach-list h4, .tt .tt-coach-sub { font-size: var(--cds-font-size-caption); text-transform: uppercase; letter-spacing: .07em; color: var(--color-fg-muted); font-weight: 600; margin: var(--cds-gap-md) 0 var(--cds-gap-xs); }
+.tt .tt-coach-list ul { margin: 0; padding-left: 1.2em; display: grid; gap: var(--cds-gap-xs); }
+.tt .tt-coach-line { margin: 0; font-size: 13px; color: var(--color-fg-muted); }
+.tt .tt-coach .tt-note { margin: 0 0 var(--cds-gap-xs); }
 .tt .tt-btn.tt-small { padding: 0 var(--cds-pad-sm); font-size: 0.85em; }
 
 /* Home: games being played right now */

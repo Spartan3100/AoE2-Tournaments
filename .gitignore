@@ -6,3 +6,4 @@ __pycache__/
 *.pyc
 _admin_applied.json
 _uploads_applied.json
+_analysis_applied.json

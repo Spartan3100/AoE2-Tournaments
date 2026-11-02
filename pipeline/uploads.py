@@ -1,14 +1,17 @@
 # Replays members add on the site (Supabase table replay_uploads, files in the private storage bucket "replays"), for
-# games Microsoft has no replay of, or left out of its match history altogether.
-#   python pipeline/uploads.py fetch <dir>   save the waiting uploads' rows (<dir>/uploads.json) and files (<dir>/uploads/)
-#   python pipeline/uploads.py mark          record what run.py made of them (_uploads_applied.json): run once the data
-#                                            is published, so an upload never reads "done" before its game shows
+# games Microsoft has no replay of, or left out of its match history altogether; and games members asked to have
+# analysed first ("Analyse now", table analysis_requests).
+#   python pipeline/uploads.py fetch <dir>   save the waiting uploads' rows (<dir>/uploads.json) and files (<dir>/uploads/),
+#                                            and the waiting analysis requests (<dir>/priority.json)
+#   python pipeline/uploads.py mark          record what run.py made of them (_uploads_applied.json, _analysis_applied.json):
+#                                            run once the data is published, so nothing reads "done" before its game shows
 # run.py checks each replay is that game, then analyses it like a downloaded one. Exits 0 either way: a failed read
-# just leaves the uploads waiting for the next run.
+# just leaves the uploads and requests waiting for the next run.
 import json, os, sys, urllib.parse, urllib.request
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 DONE = os.path.join(ROOT, '_uploads_applied.json')
+ASKED = os.path.join(ROOT, '_analysis_applied.json')
 MAX_BYTES = 50 * 1024 * 1024
 
 
@@ -50,23 +53,33 @@ def fetch(out):
     with open(os.path.join(out, 'uploads.json'), 'w') as f:
         json.dump(rows, f)
     print(f'{len(rows)} added replay(s) to check')
+    asked = []
+    if base:
+        try:
+            asked = call(f'{base}/rest/v1/analysis_requests?status=eq.waiting&order=id&limit=20&select=id,match_id,created_at', h) or []
+        except Exception as e:  # noqa: BLE001
+            print(f"Couldn't read analysis requests: {e}")
+    with open(os.path.join(out, 'priority.json'), 'w') as f:
+        json.dump(asked, f)
+    print(f'{len(asked)} game(s) asked to be analysed first')
 
 
 def mark():
-    if not os.path.exists(DONE):
-        return
-    with open(DONE) as f:
-        results = json.load(f)
     base, h = setup()
     if not base:
         return
-    for r in results:
-        try:
-            call(f"{base}/rest/v1/replay_uploads?id=eq.{int(r['id'])}", {**h, 'Prefer': 'return=minimal'}, 'PATCH',
-                 {'status': r['status'], 'message': str(r.get('message') or '')[:300]})
-        except Exception as e:  # noqa: BLE001
-            print(f"upload {r.get('id')}: couldn't record the result: {e}")
-    print(f'Recorded {len(results)} added replay result(s)')
+    for path, table, what in ((DONE, 'replay_uploads', 'added replay'), (ASKED, 'analysis_requests', 'analysis request')):
+        if not os.path.exists(path):
+            continue
+        with open(path) as f:
+            results = json.load(f)
+        for r in results:
+            try:
+                call(f"{base}/rest/v1/{table}?id=eq.{int(r['id'])}", {**h, 'Prefer': 'return=minimal'}, 'PATCH',
+                     {'status': r['status'], 'message': str(r.get('message') or '')[:300]})
+            except Exception as e:  # noqa: BLE001
+                print(f"{what} {r.get('id')}: couldn't record the result: {e}")
+        print(f'Recorded {len(results)} {what} result(s)')
 
 
 if __name__ == '__main__':

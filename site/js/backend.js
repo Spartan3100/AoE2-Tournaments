@@ -276,6 +276,16 @@
   const rpc = async (name, args) => { const { data, error } = await st.client.rpc(name, args); if (error) throw error; return data; };
   // "Sync now": request_sync() in supabase/schema.sql asks GitHub to run the update job (render.js shows its progress)
   window.TT_SYNC = { can: () => !!st.session && st.member && st.role !== 'viewer', request: () => rpc('request_sync'), status: () => rpc('sync_status') };
+  // "Analyse now": request_analysis() puts a game first in the replay queue and starts the update job
+  window.TT_ANALYSE = {
+    can: canAddReplays,
+    request: (matchId) => rpc('request_analysis', { p_match_id: String(matchId) }),
+    async latest(matchId) {
+      const { data, error } = await st.client.from('analysis_requests').select('id,status,message,created_at').eq('match_id', String(matchId)).order('id', { ascending: false }).limit(1);
+      if (error) throw error;
+      return (data || [])[0] || null;
+    },
+  };
   window.TT_ORG = {
     save: saveChange, cancel: cancelChange, isOrganizer, canRun, canRunAll,
     people: () => rpc('members_list'),

@@ -74,6 +74,7 @@ def main():
         wj(os.path.join(DATA, 'backfill.json'), rj(os.path.join(out, 'backfill.json'), {}))
         # what became of the added replays: recorded in Supabase once the site is published (uploads.py mark)
         wj(os.path.join(ROOT, '_uploads_applied.json'), rj(os.path.join(out, 'uploads_result.json'), []))
+        wj(os.path.join(ROOT, '_analysis_applied.json'), rj(os.path.join(out, 'analysis_result.json'), []))  # "Analyse now"
         for f in os.listdir(out):
             if f.startswith('pb_') and f.endswith('.json'):
                 shutil.copy(os.path.join(out, f), os.path.join(PB, f))

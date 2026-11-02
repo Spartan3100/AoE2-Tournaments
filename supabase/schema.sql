@@ -351,17 +351,13 @@ alter table public.sync_requests enable row level security;
 drop policy if exists "read syncs" on public.sync_requests;
 create policy "read syncs" on public.sync_requests for select to authenticated using (public.is_member());
 
-create or replace function public.request_sync() returns json
+-- asks GitHub to run the update job and records it; false if the token isn't set up. Only the functions below call it.
+create or replace function public.start_update_job() returns boolean
 language plpgsql security definer set search_path = public, extensions as $$
-declare last timestamptz; tok text; rid bigint;
+declare tok text; rid bigint;
 begin
-  if not public.can_add_replays() then raise exception 'Players and organizers can start a sync'; end if;
-  select max(requested_at) into last from public.sync_requests;
-  if last > now() - interval '5 minutes' then
-    return json_build_object('ok', false, 'at', last, 'message', 'A sync was started less than 5 minutes ago. It''s running now.');
-  end if;
   select decrypted_secret into tok from vault.decrypted_secrets where name = 'github_sync_token';
-  if tok is null then raise exception 'Sync isn''t set up yet: the owner needs to add the GitHub token (README, "Sync now")'; end if;
+  if tok is null then return false; end if;
   select net.http_post(
     url := 'https://api.github.com/repos/Spartan3100/AoE2-Tournaments/actions/workflows/update.yml/dispatches',
     body := jsonb_build_object('ref', 'main'),
@@ -369,6 +365,20 @@ begin
       'X-GitHub-Api-Version', '2022-11-28', 'User-Agent', 'aoe2-tournaments', 'Content-Type', 'application/json')
   ) into rid;
   insert into public.sync_requests (requested_by, net_id) values (auth.uid(), rid);
+  return true;
+end $$;
+revoke execute on function public.start_update_job() from public, anon, authenticated;
+
+create or replace function public.request_sync() returns json
+language plpgsql security definer set search_path = public, extensions as $$
+declare last timestamptz;
+begin
+  if not public.can_add_replays() then raise exception 'Players and organizers can start a sync'; end if;
+  select max(requested_at) into last from public.sync_requests;
+  if last > now() - interval '5 minutes' then
+    return json_build_object('ok', false, 'at', last, 'message', 'A sync was started less than 5 minutes ago. It''s running now.');
+  end if;
+  if not public.start_update_job() then raise exception 'Sync isn''t set up yet: the owner needs to add the GitHub token (README, "Sync now")'; end if;
   return json_build_object('ok', true, 'at', now());
 end $$;
 
@@ -384,6 +394,50 @@ begin
   return json_build_object('at', r.requested_at, 'code', code, 'message', msg);
 end $$;
 grant execute on function public.request_sync(), public.sync_status() to authenticated;
+
+-- ---------------------------------------------------------------- "Analyse now"
+-- A player or organizer can move a game to the front of the replay queue (Games > a game > "Analyse now"): the update
+-- job (pipeline/uploads.py fetch) reads waiting requests, run.py analyses those games first and skips the slow history
+-- backfill that run, and uploads.py mark sets status 'done' with what happened in message once the site is published.
+create table if not exists public.analysis_requests (
+  id bigint generated always as identity primary key,
+  match_id text not null check (match_id ~ '^[A-Za-z0-9_-]{1,80}$'),
+  requested_by uuid default auth.uid() references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  status text not null default 'waiting' check (status in ('waiting', 'done')),
+  message text not null default ''
+);
+alter table public.analysis_requests enable row level security;
+drop policy if exists "read analysis requests" on public.analysis_requests;
+create policy "read analysis requests" on public.analysis_requests for select to authenticated using (public.is_member());
+-- (rows are added only by request_analysis() below)
+
+-- Records the request and starts the update job. That is allowed a minute after the last one, not five as for "Sync
+-- now": a job already running may be past the point where it reads requests, and GitHub keeps at most one more run
+-- waiting behind it, so asking again never piles up runs. Asking twice for the same game doesn't start another.
+create or replace function public.request_analysis(p_match_id text) returns json
+language plpgsql security definer set search_path = public, extensions as $$
+declare last timestamptz; dup boolean;
+begin
+  if not public.can_add_replays() then raise exception 'Players and organizers can ask for a game to be analysed'; end if;
+  if p_match_id is null or p_match_id !~ '^[A-Za-z0-9_-]{1,80}$' then raise exception 'That isn''t a game id'; end if;
+  dup := exists (select 1 from public.analysis_requests where match_id = p_match_id and status = 'waiting');
+  if not dup then
+    if (select count(*) from public.analysis_requests where status = 'waiting') >= 20 then
+      raise exception '20 games are already waiting to be analysed. Try again after the next update.';
+    end if;
+    insert into public.analysis_requests (match_id) values (p_match_id);
+  end if;
+  select max(requested_at) into last from public.sync_requests;
+  if last > now() - interval '1 minute' or (dup and last > now() - interval '5 minutes') then
+    return json_build_object('ok', true, 'started', false, 'at', last);
+  end if;
+  if not public.start_update_job() then
+    return json_build_object('ok', true, 'started', false, 'at', null, 'message', 'It''s first in line at the next update (every 30 minutes).');
+  end if;
+  return json_build_object('ok', true, 'started', true, 'at', now());
+end $$;
+grant execute on function public.request_analysis(text) to authenticated;
 
 -- Last step: make yourself the owner. Replace the address with the email on the account you'll sign in with
 -- (for Discord, your Discord account's email), then run just this line.
