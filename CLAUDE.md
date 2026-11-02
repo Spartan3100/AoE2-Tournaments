@@ -30,6 +30,9 @@ The site is invite-only: the workflow encrypts every JSON file in `config/` (exc
 - Never trim history (it is all-time). Never commit generated data to `main`.
 - Text shown to players is plain English; set user-supplied strings with `textContent`.
 
+## Mockups
+- Always build a mockup as a clickable HTML page that behaves like the live site (real data where possible), with an options panel for every design choice that changes the page live, and a "Generate prompt" button that turns the chosen options (plus a notes box) into a prompt the owner can copy back. The owner decides from that, so don't build the real thing until they have.
+
 ## Test locally
 ```
 export SITE_KEY=$(python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())")   # or SUPABASE_SERVICE_KEY
