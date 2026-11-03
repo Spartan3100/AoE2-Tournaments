@@ -56,7 +56,9 @@
     list.sort((a, b) => String(a.team).localeCompare(String(b.team)) || (b.mine - a.mine));
     const byTeam = teams.map((t) => ({ id: t, members: list.filter((x) => x.team === t) }));
     byTeam.forEach((t, i) => { t.name = t.members.length > 1 ? `Team ${i + 1}` : t.members[0].name; t.color = t.members[0].color; t.won = t.members.some((x) => Number(x.f.won) === 1); t.key = `t${i}`; });
-    return { list, teams: byTeam, end, n, teamGame: byTeam.some((t) => t.members.length > 1) };
+    // read before the per-minute charts, and the replay is no longer on Microsoft's server (pipeline/run.py refreshed)
+    const gone = !!(ctx.game && Number(ctx.game.refreshed) === 1 && Number(ctx.game.av || 1) < 2);
+    return { list, teams: byTeam, end, n, gone, teamGame: byTeam.some((t) => t.members.length > 1) };
   }
   // the player's own record on the site: with this civ, against the other civ (1v1), and by opening
   function record(ctx, x) {
@@ -167,7 +169,8 @@
   const seg = (label, items, cur, set) => h('div', { class: 'bd-seg', role: 'group', 'aria-label': label }, items.map(([v, t]) => h('button', { type: 'button', 'aria-pressed': String(cur === v), onclick: () => set(v) }, t)));
   const noSeries = (G) => h('p', { class: 'bd-empty' }, G.list.some((x) => x.f.ser)
     ? 'Some players in this game have no per-minute data (their replay was read before these charts existed).'
-    : 'This game was analysed before the per-minute charts existed. “Analyse now” above reads it again while Microsoft still has the replay; otherwise older games are redone a few at a time with each update.');
+    : G.gone ? 'This game was analysed before the per-minute charts existed, and Microsoft no longer has its replay, so they can’t be made for it. The rest of the breakdown is from the earlier analysis.'
+      : 'This game was analysed before the per-minute charts existed. “Analyse now” above reads it again while Microsoft still has the replay; otherwise older games are redone a few at a time with each update.');
 
   // what a chart can show: each player, or each team added up (eAPM averaged)
   function sides(G, how) {
