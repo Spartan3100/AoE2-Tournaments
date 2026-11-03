@@ -14,7 +14,7 @@ Network: data.aoe2companion.com (match lists) and aoe.ms (replay files).
 import argparse, datetime as dt, io, json, os, sys, time, urllib.request, urllib.error, zipfile, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from analyze import READER, parse_replay, playback_rows  # noqa: E402
+from analyze import ANALYSIS_V, READER, parse_replay, playback_rows  # noqa: E402
 
 API = 'https://data.aoe2companion.com/api/matches?profile_ids={pid}&page={page}'
 REPLAY = 'https://aoe.ms/replay/?gameId={mid}&profileId={pid}'
@@ -46,9 +46,11 @@ AN_COLS = ['match_id', 'number', 'name', 'profile_id', 'civ', 'won', 'map', 'dur
            'market_trades', 'techs', 'unit_data', 'resigned_min', 'player', 'started', 'type', 'opp_civs', 'opp_openings',
            'build_order', 'unit_mix', 'units', 'feudal_army', 'castle_army', 'imp_army', 'dark_vills', 'dark_idle_s',
            'vills_castle', 'farms', 'production', 'key_techs', 'opp_army', 'opp_military', 'opp_villagers', 'opp_eapm',
-           'opp_feudal_min', 'opp_castle_min', 'opp_imperial_min']
+           'opp_feudal_min', 'opp_castle_min', 'opp_imperial_min', 'team', 'color', 'tc_times', 'eapm_min', 'idle_min', 'vills_min',
+           'army_min']
 GAME_COLS = ['match_id', 'started', 'type', 'map', 'players_tracked', 'checked_at', 'map_size', 'dimension', 'duration_min',
-             'rated', 'version', 'players', 'status', 'has_playback', 'playback_id', 'replay_profile_id', 'retried', 'reader', 'error']
+             'rated', 'version', 'players', 'status', 'has_playback', 'playback_id', 'replay_profile_id', 'retried', 'reader', 'error',
+             'av', 'refreshed']
 
 
 def load(path, default):
@@ -429,15 +431,19 @@ def main():
         if (r['started'] >= rcut and r['type'] != 'Other') or r['match_id'] in rush:
             by_match.setdefault(r['match_id'], []).append(r)
     status = {g['match_id']: g for g in games}
-    todo, again = {}, {}
+    todo, again, refresh = {}, {}, {}
+    stale = lambda g: str(g.get('status', '')).startswith('Analyzed') and int(g.get('av') or 1) < ANALYSIS_V
     for mid, rows in by_match.items():
         g = status.get(mid)
         if mid in rush and g is not None:
             # asked for: try again whatever happened before (Microsoft's copy may be up now, or the reader better)
-            if g.get('status') == 'Analyzed, playback expired':
-                again[mid] = rows
-            elif g.get('status') != 'Analyzed':
+            if stale(g) or g.get('status') not in ('Analyzed', 'Analyzed, playback expired'):
                 todo[mid] = rows
+            elif g.get('status') == 'Analyzed, playback expired':
+                again[mid] = rows
+            continue
+        if g is not None and stale(g) and not g.get('refreshed'):
+            refresh[mid] = rows  # analysed before the per-minute charts: read once more while the replay is still there
             continue
         if g is None:
             todo[mid] = rows
@@ -459,7 +465,8 @@ def main():
     order = first + \
         sorted(((k, v) for k, v in todo.items() if k in uploaded and k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True) + \
         sorted(((k, v) for k, v in todo.items() if k not in uploaded and k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True) + \
-        sorted(((k, v) for k, v in again.items() if k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True)
+        sorted(((k, v) for k, v in again.items() if k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True) + \
+        sorted(refresh.items(), key=lambda kv: kv[1][0]['started'], reverse=True)[:15]
     # a run with games asked for stays short: those, then a few others
     max_replays = min(a.max_replays, len(first) + 10) if first else a.max_replays
     tried_ids = set()
@@ -496,12 +503,12 @@ def main():
                 'players_tracked': ', '.join(sorted({r['player'] for r in rows})), 'checked_at': now.strftime('%Y-%m-%dT%H:%M:%SZ'),
                 'retried': 1 if old is not None else 0}
         if not data and playback_only:
-            games.append({**old, 'retried': 1, 'checked_at': base['checked_at']})  # replay no longer on the server: keep the analysis
+            games.append({**old, 'retried': 1, 'refreshed': 1, 'checked_at': base['checked_at']})  # replay no longer on the server: keep the analysis
             outcome['no_replay'] += 0 if failed_dl else 1
             outcome['download_failed'] += 1 if failed_dl else 0
             continue
         if not data and old is not None and not failed_dl:
-            games.append({**old, 'retried': 1, 'checked_at': base['checked_at']})
+            games.append({**old, 'retried': 1, 'refreshed': 1, 'checked_at': base['checked_at']})
             outcome['no_replay'] += 1
             continue
         if not data and old is not None:
@@ -567,6 +574,7 @@ def main():
             opp = [o for o in res['players'] if team_of[o['number']] != team_of[row['number']]]
             row['opp_civs'] = ', '.join(o['civ'] for o in opp)
             row['opp_openings'] = ', '.join(o['opening'] for o in opp)
+            row['team'] = team_of[row['number']]
             # what the other side did, for the game breakdown (site/js/coach.js): their army and, for team games,
             # the average of their timings
             onums = {o['number'] for o in opp}
@@ -579,7 +587,6 @@ def main():
                 vals = [o[f] for o in opp if o.get(f) is not None]
                 name = {'military_units': 'opp_military', 'villagers': 'opp_villagers'}.get(f, 'opp_' + f)
                 row[name] = round(sum(vals) / len(vals), 2) if vals else None
-            row.pop('team', None)
             steps = [b for b in res['build'] if b['number'] == row['number']]
             row['build_order'] = '; '.join(f"{b['min']:.1f} {b['item']}" for b in steps[:18] if b['min'] is not None)
             cls = {}
@@ -589,14 +596,14 @@ def main():
             row['unit_mix'] = ', '.join(f'{k} {v}' for k, v in sorted(cls.items(), key=lambda kv: -kv[1]) if k != 'Villager')
             analysis.append(row)
         if 'playback' not in res:
-            games.append({**base, **{k: v for k, v in res['game'].items() if k != 'match_id'}, 'status': 'Analyzed, playback expired',
+            games.append({**base, **{k: v for k, v in res['game'].items() if k != 'match_id'}, 'status': 'Analyzed, playback expired', 'av': ANALYSIS_V,
                           'has_playback': 0, 'playback_id': '', 'replay_profile_id': used_pid})
             continue
-        pb = playback_rows(res['playback'], res['build'], res['units'], mid, res['game']['map'])
+        pb = playback_rows(res['playback'], res['build'], res['units'], mid, res['game']['map'], res['players'])
         fname = f'pb_{mid}.json'
         with open(os.path.join(a.out, fname), 'w') as f:
             json.dump(pb, f, separators=(',', ':'))
-        games.append({**base, **{k: v for k, v in res['game'].items() if k != 'match_id'}, 'status': 'Analyzed',
+        games.append({**base, **{k: v for k, v in res['game'].items() if k != 'match_id'}, 'status': 'Analyzed', 'av': ANALYSIS_V,
                       'has_playback': 1, 'playback_id': f'pb_{mid}', 'replay_profile_id': used_pid, 'uploaded': 1 if mid in uploaded else 0})
         new_pb.append({'match_id': mid, 'file': fname, 'title': f"Playback {base['map']} {base['started'][:10]}"[:40]})
 

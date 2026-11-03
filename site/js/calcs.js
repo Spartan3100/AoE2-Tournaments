@@ -600,6 +600,7 @@ dash.calc('review_list', {
         result: hs.map((r) => `${r.player} ${Number(r.won) === 1 ? 'won' : 'lost'} as ${r.civ}`).join('; '),
         tournament: scopes.has('Tournament') ? 1 : 0, replay,
         views: [...scopes].join('|'), has_playback: Number(g.has_playback) === 1 ? 1 : 0, playback_id: g.playback_id || '',
+        av: Number(g.av) || 1, refreshed: Number(g.refreshed) || 0, // analysis version (pipeline/analyze.py ANALYSIS_V)
       };
     }).concat(unknownGames(unrecorded)).sort((a, b) => (a.started < b.started ? 1 : -1));
   },

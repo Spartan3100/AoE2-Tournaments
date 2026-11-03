@@ -94,10 +94,34 @@
     if (!p) return null;
     const ev = (pb.events || []).filter((e) => e.p === number);
     const ageAt = (name) => { const e = ev.find((x) => x.k === 'a' && x.n === `Reached ${name} Age`); return e ? e.t / 60 : null; };
-    const f = { number, name: p.name, civ: p.civ, won: N(p.won), team: p.team, dur: pb.duration_s ? pb.duration_s / 60 : null,
+    const f = { number, name: p.name, civ: p.civ, won: N(p.won), team: p.team, color: N(p.color), x: N(p.x), y: N(p.y), dur: pb.duration_s ? pb.duration_s / 60 : null,
       feudal: ageAt('Feudal'), castle: ageAt('Castle'), imperial: ageAt('Imperial') };
+    // the summary pipeline/analyze.py saved for every player (newer playbacks): opening, styles, eAPM, per-minute series
+    const sr = (pb.series || []).find((x) => N(x.number) === number);
+    if (sr) {
+      Object.assign(f, { eapm: N(sr.eapm), opening: sr.opening || '', castle_plan: sr.castle_plan || '', attack_style: sr.attack_style || '',
+        first_attack: N(sr.first_attack_min), villagers: N(sr.villagers), military: N(sr.military_units), tcs: N(sr.town_centers) });
+      if (f.feudal == null) f.feudal = N(sr.feudal_min);
+      if (f.castle == null) f.castle = N(sr.castle_min);
+      if (f.imperial == null) f.imperial = N(sr.imperial_min);
+      if (sr.key_techs) { const kp = pairs(sr.key_techs, ';'); if (kp.length) f.key = new Map(kp); }
+      addSeries(f, sr);
+    }
+    f.opp = f.opp || { openings: [], civs: [] };
     fillFromPlayback(f, pb);
     return f;
+  }
+  // per-minute series (pipeline/analyze.py series): eAPM, Town Center idle seconds, villagers so far, army by class
+  const nums = (s) => (s == null || s === '' ? null : String(s).split(',').map(Number));
+  function addSeries(f, src) {
+    if (!src || f.ser) return;
+    if (src.color != null && src.color !== '' && f.color == null) f.color = N(src.color);
+    if (src.team != null && src.team !== '' && f.team == null) f.team = N(src.team);
+    if (src.tc_times != null && !f.tcTimes) f.tcTimes = nums(src.tc_times) || [];
+    if (!src.eapm_min) return;
+    const army = {};
+    String(src.army_min || '').split('|').filter(Boolean).forEach((part) => { const i = part.lastIndexOf(':'); army[part.slice(0, i)] = nums(part.slice(i + 1)); });
+    f.ser = { eapm: nums(src.eapm_min), idle: nums(src.idle_min), vills: nums(src.vills_min), army };
   }
   // what the playback adds: units made, army by age, upgrades, buildings, Dark Age villagers (as pipeline/analyze.py)
   function fillFromPlayback(f, pb) {
@@ -159,8 +183,12 @@
         feudal: N(row.opp_feudal_min), castle: N(row.opp_castle_min), imperial: N(row.opp_imperial_min),
       },
     };
+    addSeries(f, row);
     if (pb && f.number != null && pb.players && pb.players.some((p) => p.number === f.number)) {
-      f.team = pb.players.find((p) => p.number === f.number).team;
+      const pp = pb.players.find((p) => p.number === f.number);
+      f.team = pp.team; f.x = N(pp.x); f.y = N(pp.y);
+      if (f.color == null) f.color = N(pp.color);
+      addSeries(f, (pb.series || []).find((x) => N(x.number) === f.number));
       fillFromPlayback(f, pb);
     }
     return f;
@@ -444,5 +472,270 @@
     return out;
   }
 
-  window.TT_COACH = { facts, fromPlayback, game, player, classOf, mmss };
+  // ---------------------------------------------------------------- the strategy played, named
+  const UNIT_WORD = { Knights: 'Knights', Archers: 'Crossbows', 'Battle elephants': 'Elephants', Camels: 'Camels', 'Cav archers': 'Cavalry Archers',
+    'Militia line': 'Swordsmen', Spears: 'Pikemen', Eagles: 'Eagles', Scouts: 'Light Cavalry', Monks: 'Monks', Siege: 'Siege', Gunpowder: 'Hand Cannons',
+    Skirmishers: 'Skirmishers', Navy: 'Navy', Crossbows: 'Crossbows', Infantry: 'Swordsmen' };
+  const FEUDAL_WORD = { Archers: 'archers', Scouts: 'scouts', Spears: 'spears', Skirmishers: 'skirmishers', 'Militia line': 'Men-at-Arms', Eagles: 'Eagles', Camels: 'camels' };
+  const isBoom = (f) => (f.tcs || 0) >= 3 || /^Boom/.test(f.castle_plan || '');
+  function unitWord(cls, f) {
+    if (cls === 'Unique units' && f.units) { const u = f.units.find((x) => x.cls === 'Unique units'); if (u) return `${u.unit}s`; }
+    return UNIT_WORD[cls] || cls;
+  }
+  function stratName(f) {
+    const op = f.opening || '';
+    const pressure = f.first_attack != null && f.feudal != null && f.first_attack <= f.feudal + 4;
+    const open = { Archers: pressure ? 'Archer pressure' : 'Archers', 'Skirms & spears': 'Skirmishers and spears', 'Light feudal': 'Light Feudal', Unclear: '' }[op] ?? op;
+    let castle = '';
+    const ca = f.army && sum(fight(f.army.castle)) ? sorted(fight(f.army.castle)) : null;
+    if (f.castle != null) {
+      const top = ca ? ca[0][0] : (f.castle_plan && !/^Boom|Unclear/.test(f.castle_plan) ? f.castle_plan : '');
+      const w = top ? unitWord(top, f) : '';
+      castle = isBoom(f) ? (w ? `${w} boom` : `${f.tcs || 3}-TC boom`) : w;
+    }
+    const name = open && castle ? `${open} → ${castle}` : open || castle || 'Unclear';
+    const sub = [];
+    if (f.army && sum(fight(f.army.feudal)) && op !== 'Fast Castle') sub.push(`Feudal ${listText(sorted(fight(f.army.feudal)).slice(0, 2).map(([k]) => FEUDAL_WORD[k] || k.toLowerCase()))}`);
+    else if (op === 'Fast Castle' && f.castle != null) sub.push(`Castle Age at ${mmss(f.castle)}`);
+    const then = [];
+    if (isBoom(f) && f.tcs) then.push(`${f.tcs} Town Centers`);
+    if (ca) then.push(listText(ca.slice(0, 2).map(([k]) => unitWord(k, f))));
+    if (then.length) sub.push(`${sub.length ? 'then ' : ''}${then.join(' with ')}`);
+    if (f.castle == null && f.dur != null && f.feudal != null) sub.push(`the game ended in Feudal Age`);
+    const s2 = sub.join(', ');
+    return { name, sub: s2 ? s2[0].toUpperCase() + s2.slice(1) : '' };
+  }
+
+  // ---------------------------------------------------------------- grades, judged for the strategy played
+  const LETTER = (sc) => (sc >= 93 ? 'A' : sc >= 90 ? 'A−' : sc >= 87 ? 'B+' : sc >= 83 ? 'B' : sc >= 80 ? 'B−' : sc >= 77 ? 'C+' : sc >= 73 ? 'C' : sc >= 70 ? 'C−' : sc >= 60 ? 'D' : 'F');
+  // on or before good: 96; at bad: 70; later still, down to 50
+  const tScore = (t, good, bad) => (t == null ? null : t <= good ? 96 : Math.max(50, 96 - ((t - good) / (bad - good)) * 26));
+  const clamp = (x) => Math.max(45, Math.min(98, x));
+  // how much Town Center idle matters in each age, for this strategy (Dark, Feudal, Castle, Imperial)
+  const idleWeight = (f) => [1, 0.8, isBoom(f) ? 0.8 : 0.4, 0.1];
+  const IDLE_WHY = (f) => [
+    ['crit', 'Critical', 'Every 25 seconds is a villager you never get back, and the loss compounds all game.'],
+    ['high', 'High', 'Villagers still drive everything; idle here delays Castle Age.'],
+    isBoom(f) ? ['high', 'High', 'This was a boom: the extra Town Centers only pay off if they never stop.'] : ['med', 'Medium', 'Without a boom, villagers can slow down while the army fights; idle costs less here.'],
+    ['low', 'Low', 'Most players stop making villagers by now.'],
+  ];
+  const ageOf = (f, minute) => { const m = minute + 0.5; return f.feudal == null || m < f.feudal ? 0 : f.castle == null || m < f.castle ? 1 : f.imperial == null || m < f.imperial ? 2 : 3; };
+  function idleByAge(f) {
+    const out = [0, 0, 0, 0];
+    if (!f.ser || !f.ser.idle) return null;
+    f.ser.idle.forEach((v, m) => { out[ageOf(f, m)] += v; });
+    return out;
+  }
+  function grades(f, opps, nPlayers) {
+    const t = game(f, opps, nPlayers);
+    const codes = new Set(t.better.map((x) => x.code)), good = new Set(t.well.map((x) => x.code));
+    const o = opponents(f, opps);
+    const op = f.opening, fc = op === 'Fast Castle', drush = op === 'Drush', boom = isBoom(f);
+    const out = [];
+    // Dark Age
+    let dark = tScore(f.feudal, fc ? 11.25 : drush ? 11.5 : 9.85, fc ? 12.75 : drush ? 12.75 : 11.25);
+    if (dark != null && f.dark_idle != null) dark -= Math.min(15, f.dark_idle / 8);
+    out.push({ k: 'Dark', score: dark, why: f.feudal == null ? 'Never reached Feudal Age' : `Feudal Age at ${mmss(f.feudal)}${f.dark_idle != null ? `, Town Center idle ${dur(f.dark_idle)}` : ''}` });
+    // Feudal Age
+    let feudal = null, fwhy = '';
+    if (f.feudal != null) {
+      if (fc) {
+        feudal = f.vills_castle != null ? clamp(70 + (f.vills_castle - 22) * 3) : f.castle != null ? tScore(f.castle, 16.5, 19) : null;
+        fwhy = f.vills_castle != null ? `${f.vills_castle} villagers before Castle Age` : '';
+      } else {
+        feudal = 76;
+        const fa = f.army ? sum(fight(f.army.feudal)) : null;
+        if (f.first_attack != null && f.first_attack <= f.feudal + 2.5) feudal += 10;
+        if (fa != null) feudal += fa >= 12 ? 6 : fa < 4 ? -8 : 0;
+        if (f.vills_castle != null) feudal += f.vills_castle >= 32 ? 6 : f.vills_castle < 24 ? -10 : 0;
+        if (/constant raids/.test(f.attack_style || '')) feudal += 3;
+        if (codes.has('no_walls')) feudal -= 6;
+        feudal = clamp(feudal);
+        fwhy = [f.first_attack != null ? `first attack ${mmss(f.first_attack)}` : 'no attack', fa != null ? `${fa} soldiers` : '', f.vills_castle != null ? `${f.vills_castle} villagers by Castle Age` : ''].filter(Boolean).join(', ');
+      }
+    }
+    out.push({ k: 'Feudal', score: feudal, why: fwhy });
+    // Castle Age
+    let castle = f.castle != null ? tScore(f.castle, fc ? 16.5 : 19.5, fc ? 19 : 23) : (f.dur != null && f.dur >= 26 ? 55 : null);
+    let cwhy = f.castle != null ? `Castle Age at ${mmss(f.castle)}` : f.dur >= 26 ? 'Never reached Castle Age' : '';
+    if (castle != null && f.castle != null) {
+      if (boom && f.tcTimes && f.tcTimes.length) {
+        const soon = f.tcTimes.filter((x) => x >= f.castle - 0.5 && x <= f.castle + 4).length;
+        castle += soon >= 2 ? 4 : f.tcTimes[0] > f.castle + 5 ? -10 : 0;
+        cwhy += `, extra Town Centers at ${f.tcTimes.slice(0, 3).map(mmss).join(', ')}`;
+      }
+      if (codes.has('unit_upgrades')) castle -= 6;
+      if (codes.has('blacksmith')) castle -= 5;
+      castle = clamp(castle);
+    }
+    out.push({ k: 'Castle', score: castle, why: cwhy });
+    // Imperial Age
+    let imp = null, iwhy = '';
+    if (f.imperial != null) { imp = Math.max(60, tScore(f.imperial, 33, 42)); iwhy = `Imperial Age at ${mmss(f.imperial)}`; }
+    else if (f.dur != null && f.dur >= 42 && f.castle != null) { imp = 55; iwhy = `Never reached Imperial Age in ${Math.round(f.dur)} minutes`; }
+    out.push({ k: 'Imperial', score: imp, why: iwhy });
+    // Economy
+    let eco = null, ewhy = '';
+    if (f.villagers != null && f.dur != null && f.dur >= 12) {
+      const per = f.villagers / Math.min(f.dur, 40);
+      eco = clamp(60 + (per / 2.6) * 32);
+      ewhy = `about ${f.villagers} villagers`;
+      if (codes.has('eco_upgrades')) eco -= 6;
+      if (good.has('eco_upgrades_ok')) eco += 3;
+      const ia = idleByAge(f);
+      if (ia) {
+        const w = idleWeight(f), cost = ia.reduce((a2, v, k) => a2 + v * w[k], 0);
+        eco -= Math.min(15, cost / Math.max(10, f.dur) / 3);
+        ewhy += `, ${dur(ia[0] + ia[1] + ia[2])} Town Center idle before Imperial Age`;
+      }
+      eco = clamp(eco);
+    } else if (f.key) { eco = codes.has('eco_upgrades') ? 74 : 86; ewhy = codes.has('eco_upgrades') ? 'missed economy upgrades' : 'economy upgrades on time'; }
+    out.push({ k: 'Economy', score: eco, why: ewhy });
+    // Army
+    let army = null, awhy = '';
+    if (f.military != null) {
+      army = o.military ? clamp(60 + Math.min(1.4, f.military / o.military) * 26) : 82;
+      awhy = o.military ? `about ${f.military} soldiers against ${Math.round(o.military)}` : `about ${f.military} soldiers`;
+      if (codes.has('no_counter')) army -= 8;
+      if (good.has('countered')) army += 4;
+      if (codes.has('got_countered')) army -= 5;
+      if (codes.has('blacksmith')) army -= 4;
+      army = clamp(army);
+    }
+    out.push({ k: 'Army', score: army, why: awhy });
+    const weight = { Dark: 1, Feudal: fc ? 0.6 : 1.3, Castle: fc || boom ? 1.5 : 1, Imperial: 0.6, Economy: boom || fc ? 1.4 : 1, Army: fc || boom ? 1 : 1.3 };
+    const graded = out.filter((g) => g.score != null);
+    const total = graded.reduce((a2, g) => a2 + g.score * weight[g.k], 0) / Math.max(1e-9, graded.reduce((a2, g) => a2 + weight[g.k], 0));
+    out.forEach((g) => { g.v = g.score == null ? '—' : LETTER(g.score); });
+    return { phases: out, overall: graded.length ? LETTER(total) : '—', score: total, tips: t };
+  }
+
+  // ---------------------------------------------------------------- civ playbook: how each civ is usually played
+  // o: openings that suit it on open maps (analyze.py names), c: Castle Age armies (classes), u: in words, r: flank or pocket
+  const PB = {
+    Armenians: ['Men-at-Arms|Archers', 'Militia line|Archers', 'Champions and Composite Bowmen', 'flank'],
+    Aztecs: ['Archers|Men-at-Arms|Drush', 'Eagles|Monks|Unique units', 'Eagles, Monks and Jaguar Warriors', 'flank'],
+    Bengalis: ['Fast Castle|Archers', 'Battle elephants|Unique units', 'Battle Elephants and Rathas', 'pocket'],
+    Berbers: ['Scouts|Archers', 'Knights|Cav archers|Camels', 'cheap Knights and Camel Archers', 'pocket'],
+    Bohemians: ['Men-at-Arms|Fast Castle', 'Gunpowder|Spears|Monks', 'Hand Cannoneers, Halberdiers and Monks', 'flank'],
+    Britons: ['Archers', 'Archers', 'Crossbows into Longbowmen', 'flank'],
+    Bulgarians: ['Men-at-Arms|Scouts', 'Knights|Militia line', 'Knights and cheap Two-Handed Swordsmen', 'pocket'],
+    Burgundians: ['Scouts|Fast Castle', 'Knights', 'Knights with an early Cavalier', 'pocket'],
+    Burmese: ['Scouts|Archers', 'Battle elephants|Monks|Unique units', 'Battle Elephants, Arambai and Monks', 'pocket'],
+    Byzantines: ['Archers|Skirms & spears', 'Archers|Camels|Skirmishers', 'cheap counter units and Cataphracts', 'flank'],
+    Celts: ['Scouts|Men-at-Arms', 'Militia line|Siege', 'Woad Raiders and fast siege', 'flank'],
+    Chinese: ['Archers|Scouts', 'Archers|Unique units', 'Crossbows and Chu Ko Nu', 'flank'],
+    Cumans: ['Scouts', 'Knights|Cav archers', 'an early second Town Center into Knights or Cavalry Archers', 'pocket'],
+    Dravidians: ['Archers|Men-at-Arms', 'Militia line|Archers|Unique units', 'Urumi Swordsmen and Elephant Archers', 'flank'],
+    Ethiopians: ['Archers', 'Archers|Spears', 'Crossbows with free Pikemen', 'flank'],
+    Franks: ['Scouts|Fast Castle', 'Knights', 'Knights into Paladins', 'pocket'],
+    Georgians: ['Scouts', 'Knights|Unique units', 'Monaspa and Knights', 'pocket'],
+    Goths: ['Men-at-Arms|Drush|Scouts', 'Militia line|Unique units', 'cheap infantry and Huskarls', 'flank'],
+    Gurjaras: ['Scouts', 'Camels|Unique units', 'Shrivamsha Riders and Camels', 'pocket'],
+    Hindustanis: ['Archers|Scouts', 'Camels|Gunpowder', 'Camels and Hand Cannoneers', 'pocket'],
+    Huns: ['Scouts', 'Knights|Cav archers', 'Cavalry Archers and Tarkans', 'pocket'],
+    Inca: ['Archers|Drush', 'Eagles|Unique units|Archers', 'Eagles, Kamayuks and Slingers', 'flank'],
+    Italians: ['Archers', 'Archers|Gunpowder', 'Genoese Crossbowmen and Crossbows', 'flank'],
+    Japanese: ['Archers|Men-at-Arms', 'Archers|Militia line|Unique units', 'Samurai and Crossbows', 'flank'],
+    Jurchens: ['Scouts', 'Knights|Cav archers', 'cavalry', 'pocket'],
+    Khitans: ['Scouts', 'Cav archers', 'Cavalry Archers', 'pocket'],
+    Khmer: ['Scouts', 'Knights|Battle elephants', 'Knights and Battle Elephants', 'pocket'],
+    Koreans: ['Archers', 'Archers|Siege|Unique units', 'War Wagons and Onagers', 'flank'],
+    Lithuanians: ['Scouts', 'Knights|Unique units', 'Knights and Leitis, stronger with relics', 'pocket'],
+    Magyars: ['Scouts', 'Knights|Cav archers', 'Magyar Huszars and Cavalry Archers', 'pocket'],
+    Malay: ['Archers|Fast Castle', 'Battle elephants|Spears|Unique units', 'cheap Battle Elephants and Karambit Warriors', 'any'],
+    Malians: ['Scouts|Archers', 'Knights|Militia line|Unique units', 'Gbetos and Knights', 'any'],
+    Maya: ['Archers|Eagles', 'Archers|Eagles', 'cheap Archers into Plumed Archers, with Eagles', 'flank'],
+    Mongols: ['Scouts', 'Cav archers|Scouts|Siege', 'Mangudai, Light Cavalry and siege', 'pocket'],
+    Persians: ['Scouts|Fast Castle', 'Knights|Unique units', 'Knights and War Elephants on a Town Center boom', 'pocket'],
+    Poles: ['Scouts', 'Knights|Unique units', 'Szlachta Knights and Obuch', 'pocket'],
+    Portuguese: ['Archers', 'Archers|Gunpowder|Unique units', 'Organ Guns and Crossbows', 'flank'],
+    Romans: ['Scouts|Men-at-Arms', 'Militia line|Scouts', 'Legionaries and Centurions', 'any'],
+    Saracens: ['Archers|Men-at-Arms into archers', 'Archers|Camels', 'Crossbows and Camels, with the market', 'flank'],
+    Sicilians: ['Scouts|Men-at-Arms', 'Knights|Unique units', 'Serjeants and Knights', 'pocket'],
+    Slavs: ['Scouts|Drush', 'Knights|Militia line|Siege', 'Knights, Boyars and cheap siege', 'pocket'],
+    Spanish: ['Scouts', 'Knights|Gunpowder|Unique units', 'Conquistadors and Knights', 'pocket'],
+    Tatars: ['Scouts', 'Cav archers|Unique units', 'Cavalry Archers and Keshiks', 'pocket'],
+    Teutons: ['Scouts|Fast Castle', 'Knights|Militia line', 'Knights and Teutonic Knights', 'pocket'],
+    Turks: ['Scouts|Fast Castle', 'Gunpowder|Scouts', 'Hand Cannoneers, Janissaries and free Light Cavalry upgrades', 'pocket'],
+    Vietnamese: ['Archers', 'Archers|Unique units', 'Archers and Rattan Archers', 'flank'],
+    Vikings: ['Archers|Men-at-Arms', 'Archers|Militia line|Unique units', 'Crossbows and Berserks on a fast economy', 'flank'],
+  };
+  // civs not in the table: from config/civ_styles.json's one-word style
+  const STYLE_PB = { Cavalry: ['Scouts', 'Knights', 'cavalry', 'pocket'], Archer: ['Archers', 'Archers', 'archers', 'flank'], Infantry: ['Men-at-Arms', 'Militia line', 'infantry', 'flank'],
+    'Cavalry archer': ['Scouts', 'Cav archers', 'Cavalry Archers', 'pocket'], Camel: ['Scouts', 'Camels', 'Camels', 'pocket'], Elephant: ['Fast Castle', 'Battle elephants', 'elephants', 'pocket'],
+    Gunpowder: ['Fast Castle', 'Gunpowder', 'gunpowder units', 'flank'], Siege: ['Scouts', 'Siege', 'siege', 'any'], Monk: ['Scouts', 'Monks', 'Monks', 'any'], Defensive: ['Archers', 'Archers', 'counter units', 'flank'] };
+  const ALIAS = { Incas: 'Inca', Mayans: 'Maya', Indians: 'Hindustanis', Magyar: 'Magyars' };
+  const poss = (civ) => (/s$/.test(civ) ? `${civ}’` : `${civ}’s`);
+  function playbook(civ, styles) {
+    civ = ALIAS[civ] || civ;
+    const e = PB[civ] || STYLE_PB[(styles && styles.get && styles.get(civ)) || ''];
+    return e ? { o: e[0].split('|'), c: e[1].split('|'), u: e[2], r: e[3], known: !!PB[civ] } : null;
+  }
+  const mapKind = (m) => (/island|baltic|mediterranean|bay|coastal|archipelago|water|lake|pacific|rivers/i.test(m || '') ? 'water'
+    : /arena|fortress|black forest|hideout|socotra|amazon tunnel|enclosed/i.test(m || '') ? 'closed' : 'open');
+
+  // flank or pocket in a team game (3+ a side): flanks sit nearest the enemy
+  function roles(all) {
+    const out = new Map();
+    const teams = [...new Set(all.map((f) => f.team))];
+    teams.forEach((tm) => {
+      const mine = all.filter((f) => f.team === tm && f.x != null);
+      const them = all.filter((f) => f.team !== tm && f.x != null);
+      if (mine.length < 3 || !them.length) return;
+      const d = mine.map((f) => [f, Math.min(...them.map((e) => Math.hypot(e.x - f.x, e.y - f.y)))]).sort((a2, b2) => a2[1] - b2[1]);
+      d.forEach(([f], i) => out.set(f.number, i < 2 ? 'flank' : 'pocket'));
+    });
+    return out;
+  }
+
+  // "For this matchup": the civ playbook, what the other side did, and the player's own record on the site
+  // ctx: { map, role, styles, record: { civ: [w, n], vsCiv: [w, n], openings: [[name, w, n]] } }
+  function matchup(f, opps, ctx = {}) {
+    const lines = [];
+    const mine = playbook(f.civ, ctx.styles);
+    const o = opponents(f, opps);
+    const theirCivs = [...new Set(o.civs || [])];
+    const theirs = o.army ? fight(o.army) : null;
+    let top = theirs && sum(theirs) >= 10 ? sorted(theirs).find(([c, n]) => COUNTERS[c] && n / sum(theirs) >= 0.25) : null;
+    if (!top && theirCivs.length === 1) { const tp = playbook(theirCivs[0], ctx.styles); if (tp) top = [tp.c[0], 0]; }
+    const kindMap = mapKind(ctx.map);
+    if (top && COUNTERS[top[0]]) {
+      const [answers] = COUNTERS[top[0]];
+      const best = mine ? answers.filter((c) => mine.c.includes(c)) : [];
+      const pick = (best.length ? best : answers).slice(0, 2);
+      const army = myArmy(f);
+      const share = army && sum(army) ? pick.reduce((a2, c) => a2 + (army[c] || 0), 0) / sum(army) : null;
+      const who = theirCivs.length === 1 ? theirCivs[0] : 'The other team';
+      const did = `${who} ${top[1] ? `went mostly ${kind(top[0])}` : `usually go ${kind(top[0])}`}${kindMap === 'open' && ctx.map ? ` on ${ctx.map}` : ''}.`;
+      const made = share == null ? '' : share === 0 ? ': you made none' : `: they were only ${pct(share)} of your army`;
+      const outmade = o.military && f.military != null && f.military >= 1.2 * o.military;
+      if (share != null && share >= 0.3) lines.push(`${did} Your ${listText(pick.map(kind))} were the right answer${best.length ? ` and a ${f.civ} strength` : ''}.`);
+      else if (Number(f.won) === 1 && outmade) lines.push(`${did} You won on numbers; ${listText(pick.map(kind))} would have traded better against them.`);
+      else if (best.length) lines.push(`${did} ${poss(f.civ)} best answer is ${listText(pick.map(kind))}${made}.`);
+      else lines.push(`${did} Answer with ${listText(pick.map(kind))}${made}. ${f.civ} aren’t known for those, so keep the numbers small and lean on ${mine ? mine.u : 'your main army'}.`);
+    }
+    if (mine) {
+      const op = f.opening;
+      if (kindMap === 'closed' && op !== 'Fast Castle' && !isBoom(f)) lines.push(`On a closed map, a Fast Castle into ${mine.u} is usually stronger than a Feudal Age fight.`);
+      else if (kindMap === 'open' && op && op !== 'Unclear' && !mine.o.includes(op)) lines.push(`${f.civ} usually open with ${listText(mine.o.slice(0, 2))} on open maps, building to ${mine.u}.`);
+      else if (op && mine.o.includes(op) && mine.known) lines.push(`${op} is a standard ${f.civ} opening; the plan from there is ${mine.u}.`);
+      if (ctx.role && mine.r !== 'any' && mine.r !== ctx.role) lines.push(`You were on the ${ctx.role}, but ${f.civ} suit the ${mine.r}: ${ctx.role === 'flank' ? 'hold with archers or towers and let the pocket boom' : 'boom behind your flanks and send the cavalry forward'}.`);
+      else if (ctx.role) lines.push(`${f.civ} suit the ${ctx.role} you played.`);
+    }
+    // what has worked for this player
+    const rec = ctx.record || {};
+    const bits = [];
+    if (rec.civ && rec.civ[1]) bits.push(`as ${f.civ} ${rec.civ[0]}–${rec.civ[1] - rec.civ[0]}`);
+    if (rec.vsCiv && rec.vsCiv[1] && theirCivs.length === 1) bits.push(`against ${theirCivs[0]} ${rec.vsCiv[0]}–${rec.vsCiv[1] - rec.vsCiv[0]}`);
+    const ops = (rec.openings || []).filter((x) => x[2] >= 3).sort((a2, b2) => b2[1] / b2[2] - a2[1] / a2[2]);
+    if (ops.length) bits.push(ops.slice(0, 2).map(([k, w2, n2]) => `${k} openings won ${pct(w2 / n2)} (${n2} games)`).join(', '));
+    const best = ops[0];
+    if (best && best[0] !== f.opening && best[1] / best[2] >= 0.55 && best[2] >= 4 && mine && mine.o.includes(best[0])) {
+      lines.push(`Your best opening on this site is ${best[0]} (${pct(best[1] / best[2])} won over ${best[2]} games), and it suits ${f.civ} too.`);
+    }
+    return { plan: lines.join(' '), record: bits.length ? `Your record here: ${bits.join('; ')}.` : '' };
+  }
+
+  window.TT_COACH = { facts, fromPlayback, game, player, classOf, mmss, stratName, grades, matchup, playbook, mapKind, roles, idleByAge, idleWeight, IDLE_WHY, ageOf, isBoom, COUNTERS, kind };
 })();

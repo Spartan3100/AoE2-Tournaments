@@ -44,6 +44,9 @@ from mgz.model import parse_match  # noqa: E402
 # older reader are then tried once more (pipeline/run.py). Known unreadable on 1.8.51: games with AI players on save
 # 68+ (the AI scripts are laid out differently, so the header's player list is not found).
 READER = 'mgz-1.8.51+1'
+# Bump when the analysis itself reads more from a replay: games analysed by an older version are read again (a few per
+# run, newest first, while Microsoft still has the replay). 2: per-minute eAPM, Town Center idle, villagers and army.
+ANALYSIS_V = 2
 
 # ---------------------------------------------------------------- reference sets
 VILLAGER_ONLY = {'Build', 'Wall', 'Gather', 'Back To Work', 'Reseed', 'Repair'}
@@ -244,6 +247,7 @@ def parse_replay(path, match_id='', keep_playback=True):
 
     has_units = any(queued.values())
     duration = m.duration
+    per_minute = series(m, players) if has_units else {}
     rows, units_rows, build_rows = [], [], []
 
     for p in players:
@@ -426,6 +430,8 @@ def parse_replay(path, match_id='', keep_playback=True):
             'farms': bcount.get('Farm', 0),
             'production': ', '.join(f'{k} {v}' for k, v in bcount.most_common() if k not in NOT_PRODUCTION and k not in TOWERS),
             'key_techs': '; '.join(f'{n} {mins(t):.1f}' for n, t in first_research.items()),
+            'color': p.color_id, 'tc_times': ','.join(f'{mins(t):.1f}' for t, n, _ in b if n == 'Town Center'),
+            **per_minute.get(pn, {}),
         }
         rows.append(row)
         for u, c in uc_all.most_common():
@@ -461,6 +467,71 @@ def parse_replay(path, match_id='', keep_playback=True):
         tr_units, tr_sites = build_tracks(m, start, builds, out['playback']['resources'])
         out['playback']['tracks'] = tr_units
         out['playback']['sites'] = tr_sites
+    return out
+
+
+# ---------------------------------------------------------------- per-minute series (the Game breakdown's charts)
+NOT_EFFECTIVE = {'Formation', 'Stance', None, 'Chat', 'Farm Autoqueue', 'Fish Trap Autoqueue', 'De 107 A', 'De 107 B'}
+TC_JOBS = {'Loom': 25, 'Feudal Age': 130, 'Castle Age': 160, 'Imperial Age': 190, 'Wheelbarrow': 75, 'Hand Cart': 55, 'Town Watch': 25, 'Town Patrol': 40}
+
+
+def series(m, players):
+    """Per player, one value per game minute: eAPM (orders that do something, scaled so the average matches the
+    replay's own eAPM), Town Center idle seconds (every Town Center's queue played out: villagers 25 s, Loom, ages,
+    Wheelbarrow...; a Town Center counts from its first order, the starting one from 0), villagers queued so far, and
+    army units queued each minute by class. Returns {player number: {field: compact string}}."""
+    end = m.duration.total_seconds()
+    mins = int(end // 60) + 1
+    out = {}
+    for p in players:
+        n = p.number
+        ins = [i for i in m.inputs if i.player and i.player.number == n]
+        apm = [0] * mins
+        vills = [0] * mins
+        army = collections.defaultdict(lambda: [0] * mins)
+        jobs = collections.defaultdict(list)
+        for i in ins:
+            t = i.timestamp.total_seconds()
+            k = min(mins - 1, int(t // 60))
+            if i.type not in NOT_EFFECTIVE:
+                apm[k] += 1
+            pl = i.payload or {}
+            ids = pl.get('object_ids') or []
+            if i.type == 'Queue':
+                u = pl.get('unit') or i.param
+                a = int(pl.get('amount') or 1)
+                if u == 'Villager':
+                    vills[k] += a
+                    for b in ids[:1]:
+                        jobs[b] += [(t, 25)] * a
+                elif u:
+                    army[UNIT_CLASS.get(u, 'Unique units')][k] += a
+            elif i.type == 'Research' and pl.get('technology') in TC_JOBS:
+                for b in ids[:1]:
+                    jobs[b].append((t, TC_JOBS[pl['technology']]))
+        idle = [0.0] * mins
+        first = min(jobs, key=lambda b: jobs[b][0][0]) if jobs else None
+        for b, js in jobs.items():
+            js.sort()
+            free = 0.0 if b == first else js[0][0]
+            for t, d in js:
+                while free < t:  # nothing queued from free to t
+                    k = min(mins - 1, int(free // 60))
+                    step = min(t, (int(free // 60) + 1) * 60) - free
+                    idle[k] += step
+                    free += step
+                free = max(free, t) + d
+        scale = (p.eapm / (sum(apm) / max(1.0, end / 60))) if p.eapm and sum(apm) else 1.0
+        acc, cum = 0, []
+        for v in vills:
+            acc += v
+            cum.append(acc)
+        out[n] = {
+            'eapm_min': ','.join(str(round(v * scale)) for v in apm),
+            'idle_min': ','.join(str(round(v)) for v in idle),
+            'vills_min': ','.join(str(v) for v in cum),
+            'army_min': '|'.join(f'{c}:' + ','.join(map(str, xs)) for c, xs in sorted(army.items(), key=lambda kv: -sum(kv[1]))),
+        }
     return out
 
 
@@ -560,11 +631,17 @@ def _simulate(moves, builds, start, dur, step=5.0):
     return out
 
 
-def playback_rows(pb, build, units, match_id, map_name):
-    """Flatten a playback into row objects (the dashboard reads files as rows)."""
+SERIES_FIELDS = ('eapm_min', 'idle_min', 'vills_min', 'army_min', 'tc_times', 'eapm', 'feudal_min', 'castle_min', 'imperial_min',
+                 'opening', 'castle_plan', 'attack_style', 'first_attack_min', 'key_techs', 'villagers', 'military_units', 'town_centers')
+
+
+def playback_rows(pb, build, units, match_id, map_name, players=None):
+    """Flatten a playback into row objects (the dashboard reads files as rows). players: parse_replay's rows, whose
+    per-minute series and summary go in as 'ser' rows so the Game breakdown has them for every player."""
     rows = [{'k': 'meta', 'match_id': str(match_id), 'map': map_name, 'dimension': pb['dimension'], 'duration_s': pb['duration_s'],
              'terrain': pb['terrain'], 'elevation': pb['elevation']}]
     rows += [{'k': 'player', **p} for p in pb['players']]
+    rows += [{'k': 'ser', 'number': r['number'], **{f: r.get(f) for f in SERIES_FIELDS}} for r in (players or []) if r.get('eapm_min')]
     rows += [{'k': 'res', 'r': r, 'x': x, 'y': y} for r, x, y in pb['resources']]
     rows += [{'k': 'bo', **b} for b in build]
     rows += [{'k': 'uc', **u} for u in units]
@@ -750,5 +827,5 @@ if __name__ == '__main__':
     pb = r.pop('playback', None)
     print(json.dumps(r['players'], indent=1, default=str))
     if pb:
-        rows = playback_rows(pb, r['build'], r['units'], 'sample', r['game']['map'])
+        rows = playback_rows(pb, r['build'], r['units'], 'sample', r['game']['map'], r['players'])
         print('playback rows', len(rows), 'units', len(pb['tracks']), 'bytes', len(json.dumps(rows, separators=(',', ':'))))

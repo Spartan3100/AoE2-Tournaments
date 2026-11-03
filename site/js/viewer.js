@@ -41,6 +41,7 @@
       resources: rows.filter((r) => r.k === 'res').map((r) => [r.r, N(r.x), N(r.y)]),
       build: rows.filter((r) => r.k === 'bo').map((r) => ({ number: N(r.number), step: N(r.step), min: N(r.min), kind: r.kind, item: r.item })),
       units: rows.filter((r) => r.k === 'uc').map((r) => ({ number: N(r.number), unit: r.unit, class: r.class, count: N(r.count) })),
+      series: rows.filter((r) => r.k === 'ser'), // each player's per-minute series and summary (coach.js, breakdown.js)
       tracks: units,
       sites: rows.filter((r) => r.k === 'si').map((r) => ({ p: N(r.p), n: r.n, t: N(r.t), done: N(r.done), x: N(r.x), y: N(r.y) })),
       events: rows.filter((r) => r.k && r.k.length === 1 && 'bwruamx'.includes(r.k) && r.t != null)
