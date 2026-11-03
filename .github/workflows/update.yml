@@ -11,6 +11,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      refresh_all:
+        description: 'Read every older game again (up to 40 minutes), for the per-minute charts'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -27,7 +32,7 @@ env:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -71,7 +76,7 @@ jobs:
           rm -rf data_enc
 
       - name: Add new games, read replays, check accuracy
-        run: python pipeline/update.py --max-replays 60
+        run: python pipeline/update.py --max-replays 60 ${{ github.event.inputs.refresh_all == 'true' && '--refresh-all' || '' }}
 
       # tournaments, players, rules and civ pools changed by organizers on the site (Supabase table admin_changes)
       - name: Save organizer changes

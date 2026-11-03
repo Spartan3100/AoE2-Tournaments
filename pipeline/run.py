@@ -288,9 +288,12 @@ def main():
     # 40 pages spaced 1.5 s apart never drew a 429 (2026-10-23); 150 takes ~4 minutes per run and still pauses cleanly if refused
     ap.add_argument('--backfill-pages', type=int, default=150, help='older match-list pages to fetch per run, all players together')
     ap.add_argument('--replay-days', type=int, default=0, help='0 = try every game in the history; otherwise only games this recent')
+    ap.add_argument('--refresh-max', type=int, default=15, help='games analysed by an older ANALYSIS_V to read again this run')
+    ap.add_argument('--time-budget', type=int, default=0, help='seconds; stop starting new replays after this (0 = no limit)')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     now = dt.datetime.now(dt.timezone.utc)
+    t0 = time.time()
     errors = []
 
     players = load(os.path.join(a.inp, 'players.json'), [])
@@ -466,12 +469,19 @@ def main():
         sorted(((k, v) for k, v in todo.items() if k in uploaded and k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True) + \
         sorted(((k, v) for k, v in todo.items() if k not in uploaded and k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True) + \
         sorted(((k, v) for k, v in again.items() if k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True) + \
-        sorted(refresh.items(), key=lambda kv: kv[1][0]['started'], reverse=True)[:15]
+        sorted(refresh.items(), key=lambda kv: kv[1][0]['started'], reverse=True)[:a.refresh_max]
     # a run with games asked for stays short: those, then a few others
     max_replays = min(a.max_replays, len(first) + 10) if first else a.max_replays
     tried_ids = set()
+    dl_streak = 0  # downloads failing one after another: Microsoft's server is refusing, so stop and try next run
     for mid, rows in order:
         if tried >= max_replays:
+            break
+        if a.time_budget and time.time() - t0 > a.time_budget:
+            stats_note.append(f'stopped reading replays after {a.time_budget // 60} minutes; the rest carry on next run')
+            break
+        if dl_streak >= 6:
+            stats_note.append('stopped reading replays: 6 downloads in a row failed')
             break
         tried_ids.add(mid)
         tried += 1
@@ -499,6 +509,7 @@ def main():
             if data:
                 used_pid = pid
                 break
+        dl_streak = 0 if data or not failed_dl else dl_streak + 1
         base = {'match_id': mid, 'started': rows[0]['started'], 'type': rows[0]['type'], 'map': rows[0]['map'],
                 'players_tracked': ', '.join(sorted({r['player'] for r in rows})), 'checked_at': now.strftime('%Y-%m-%dT%H:%M:%SZ'),
                 'retried': 1 if old is not None else 0}
@@ -686,6 +697,7 @@ def main():
                   'playbacks_stored': sum(1 for g in games if g.get('has_playback')),
                   'history_rows': len(history), 'analysis_rows': len(analysis),
                   'analyse_now': {'asked': len(priority), 'done': len(analysis_results)},
+                  'older_games_to_reread': sum(1 for g in games if stale(g) and not g.get('refreshed')),
                   'replays_added_on_site': {'done': sum(1 for r in upload_results if r['status'] == 'done'), 'rejected': sum(1 for r in upload_results if r['status'] != 'done')},
                   'games_without_result': len(no_result), 'rating_gaps': len(unrecorded) - len(no_result),
                   'history_backfill': {roster.get(k, k): ('done' if v.get('done') else f"page {v.get('page')}") for k, v in backfill.items()},
