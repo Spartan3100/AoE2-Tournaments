@@ -11,7 +11,7 @@ DIR (--in) holds the dashboard's current files, as downloaded from its datasets:
                   "stats": {...}, "errors": [...]}
 Network: data.aoe2companion.com (match lists) and aoe.ms (replay files).
 """
-import argparse, datetime as dt, io, json, os, sys, time, urllib.request, urllib.error, zipfile, tempfile
+import argparse, datetime as dt, io, json, os, re, sys, time, urllib.request, urllib.error, zipfile, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from analyze import ANALYSIS_V, READER, parse_replay, playback_rows  # noqa: E402
@@ -50,7 +50,7 @@ AN_COLS = ['match_id', 'number', 'name', 'profile_id', 'civ', 'won', 'map', 'dur
            'army_min']
 GAME_COLS = ['match_id', 'started', 'type', 'map', 'players_tracked', 'checked_at', 'map_size', 'dimension', 'duration_min',
              'rated', 'version', 'players', 'status', 'has_playback', 'playback_id', 'replay_profile_id', 'retried', 'reader', 'error',
-             'av', 'refreshed']
+             'av', 'refreshed', 'refresh_tries']
 
 
 def load(path, default):
@@ -465,11 +465,16 @@ def main():
         if g.get('status') == 'Could not read' and is_scenario(by_match.get(g['match_id'], [])) :
             g['status'] = 'Custom scenario'
     first = [(k, v) for k, v in list(todo.items()) + list(again.items()) if k in rush]
+    # games to read for the first time and older games to read again share one list, newest first: the history
+    # backfill leaves thousands of old games whose replays expired long ago, and those must not come before recent
+    # games waiting for the per-minute charts
+    newest = lambda kv: kv[1][0]['started']
+    fresh = sorted(((k, v) for k, v in todo.items() if k not in uploaded and k not in rush), key=newest, reverse=True)
+    redo = sorted(refresh.items(), key=newest, reverse=True)[:a.refresh_max]
     order = first + \
-        sorted(((k, v) for k, v in todo.items() if k in uploaded and k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True) + \
-        sorted(((k, v) for k, v in todo.items() if k not in uploaded and k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True) + \
-        sorted(((k, v) for k, v in again.items() if k not in rush), key=lambda kv: kv[1][0]['started'], reverse=True) + \
-        sorted(refresh.items(), key=lambda kv: kv[1][0]['started'], reverse=True)[:a.refresh_max]
+        sorted(((k, v) for k, v in todo.items() if k in uploaded and k not in rush), key=newest, reverse=True) + \
+        sorted(fresh + redo, key=newest, reverse=True) + \
+        sorted(((k, v) for k, v in again.items() if k not in rush), key=newest, reverse=True)
     # a run with games asked for stays short: those, then a few others
     max_replays = min(a.max_replays, len(first) + 10) if first else a.max_replays
     tried_ids = set()
@@ -480,8 +485,8 @@ def main():
         if a.time_budget and time.time() - t0 > a.time_budget:
             stats_note.append(f'stopped reading replays after {a.time_budget // 60} minutes; the rest carry on next run')
             break
-        if dl_streak >= 6:
-            stats_note.append('stopped reading replays: 6 downloads in a row failed')
+        if dl_streak >= 15:
+            stats_note.append('stopped reading replays: 15 downloads in a row failed')
             break
         tried_ids.add(mid)
         tried += 1
@@ -523,7 +528,9 @@ def main():
             outcome['no_replay'] += 1
             continue
         if not data and old is not None:
-            games.append(old)  # download error: try again next run
+            # download error: try again next run; a game being read again gets two tries, so it can't block the list
+            tries = int(old.get('refresh_tries') or 0) + (1 if mid in refresh else 0)
+            games.append({**old, 'refresh_tries': tries, **({'refreshed': 1} if tries >= 2 else {})})
             outcome['download_failed'] += 1
             continue
         if not data:
@@ -707,6 +714,14 @@ def main():
     with open(os.path.join(a.out, 'manifest.json'), 'w') as f:
         json.dump(manifest, f, indent=1)
     print(json.dumps(manifest['stats']), len(errors), 'errors')
+    kinds = {}
+    for e in errors:
+        k = re.sub(r'https?://\S+', 'URL', e)
+        k = re.sub(r'^(replay|parse|match list for|upload)[^:]*:', r'\1:', k)  # no match ids or names
+        k = re.sub(r'\d{5,}', '#', k)[:100]
+        kinds[k] = kinds.get(k, 0) + 1
+    if kinds:
+        print('error kinds:', json.dumps(kinds))
 
 
 if __name__ == '__main__':

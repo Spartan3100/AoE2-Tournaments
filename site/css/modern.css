@@ -18,3 +18,7 @@
 .tt .tt-modern.pf .pf-subh, .tt .tt-modern .cmp-h3 { letter-spacing: .07em; }
 .tt .tt-modern.pf .pf-list li, .tt .tt-modern.pf .pf-coach-i { border-radius: 11px; }
 #profiles.tt-modern svg text, #rivals.tt-modern svg text, #review.tt-modern svg text { font-family: var(--font-data); }
+/* Games: build-order cards fit their card, so no sideways scroll (long item names wrap instead) */
+#review.tt-modern #rv-build-grid .tt-scroll { overflow-x: hidden; }
+#review.tt-modern #rv-build-grid td { white-space: normal; overflow-wrap: anywhere; }
+#review.tt-modern #rv-build-grid td.num, #review.tt-modern #rv-build-grid th { white-space: nowrap; }
