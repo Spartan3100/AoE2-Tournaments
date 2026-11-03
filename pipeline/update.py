@@ -1,6 +1,6 @@
 """One update of the site's data. Run by .github/workflows/update.yml (every 30 minutes).
 
-  python pipeline/update.py [--max-replays 60]
+  python pipeline/update.py [--max-replays 60] [--refresh-all]
 
 Reads config/ (edited by the organizers) and data/ (written by this script), then:
   1. adds new online games for every player to data/history.json (all time, never trimmed)
@@ -43,6 +43,9 @@ def py(*args):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--max-replays', type=int, default=60)
+    # one long run that reads again every game analysed by an older version while its replay is still on Microsoft's
+    # server (Actions > Update and publish > Run workflow > "Read every older game again"); stops after 40 minutes
+    ap.add_argument('--refresh-all', action='store_true')
     a = ap.parse_args()
     os.makedirs(PB, exist_ok=True)
     now = dt.datetime.now(dt.timezone.utc)
@@ -58,7 +61,8 @@ def main():
     wj(os.path.join(inp, 'backfill.json'), rj(os.path.join(DATA, 'backfill.json'), {}))  # how far each player's history is fetched
     py(os.path.join(HERE, 'uploads.py'), 'fetch', inp)  # replays members added on the site
     before = len(rj(os.path.join(DATA, 'history.json'), []))
-    code = py(os.path.join(HERE, 'run.py'), '--in', inp, '--out', out, '--max-replays', str(a.max_replays),
+    extra = ['--max-replays', '5000', '--refresh-max', '5000', '--time-budget', '2400'] if a.refresh_all else ['--max-replays', str(a.max_replays)]
+    code = py(os.path.join(HERE, 'run.py'), '--in', inp, '--out', out, *extra,
               '--playback-days', '0', '--max-playbacks', '0')  # 0 = map playback for every game
     manifest = rj(os.path.join(out, 'manifest.json'), {})
     if code != 0 or not manifest:
